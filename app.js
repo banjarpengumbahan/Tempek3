@@ -12,10 +12,23 @@ let kelompok = Array.from({length:8}, (_,i)=>({no:i+1, anggota:[]}));
 let tugasLog = [];
 let grupab = {};
 let pinjaman = [];
+let sesiPegebagan = [];
+let absensiPegebagan = [];
 let payingLoanId = null;
+
+const DENDA_PER_ABSEN = 10000;
 
 function rupiah(n){ n = Number(n)||0; return 'Rp ' + n.toLocaleString('id-ID'); }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
+function jumlahTidakHadir(kramaId){
+  return absensiPegebagan.filter(a=>a.krama_id===kramaId && a.hadir===false).length;
+}
+function dendaOtomatis(kramaId){
+  return jumlahTidakHadir(kramaId) * DENDA_PER_ABSEN;
+}
+function totalDendaKrama(k){
+  return (Number(k.denda_manual)||0) + dendaOtomatis(k.id);
+}
 
 function showConnError(msg){
   const el = document.getElementById('connError');
@@ -39,12 +52,12 @@ async function loadAll(){
     if(e1) throw e1;
     krama = kramaData || [];
 
-    const { data: kelData, error: e2 } = await sb.from('kelompok_anggota').select('*');
-    if(e2) throw e2;
     kelompok = Array.from({length:8}, (_,i)=>({no:i+1, anggota:[]}));
-    (kelData||[]).forEach(row=>{
-      const kel = kelompok.find(x=>x.no===row.kelompok_no);
-      if(kel) kel.anggota.push(row.krama_id);
+    krama.forEach(k=>{
+      if(k.kelompok_no){
+        const kel = kelompok.find(x=>x.no===k.kelompok_no);
+        if(kel) kel.anggota.push(k.id);
+      }
     });
 
     const { data: tugasData, error: e3 } = await sb.from('tugas_log').select('*').order('tanggal', {ascending:false});
@@ -55,6 +68,14 @@ async function loadAll(){
     if(e4) throw e4;
     grupab = {};
     (grupData||[]).forEach(row=>{ grupab[row.krama_id] = row.grup; });
+
+    const { data: sesiData, error: e6 } = await sb.from('pegebagan_sesi').select('*').order('tanggal', {ascending:false});
+    if(e6) throw e6;
+    sesiPegebagan = sesiData || [];
+
+    const { data: absensiData, error: e7 } = await sb.from('pegebagan_absensi').select('*');
+    if(e7) throw e7;
+    absensiPegebagan = absensiData || [];
 
     const { data: pinjamanData, error: e5 } = await sb.from('pinjaman').select('*').order('tanggal', {ascending:false});
     if(e5) throw e5;
@@ -75,6 +96,8 @@ function renderAll(){
   renderKelompok();
   renderTugasLog();
   renderGrupAB();
+  renderAbsensiForm();
+  renderAbsensiLog();
   renderPinjamanSelect();
   renderPinjaman();
 }
@@ -93,7 +116,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
 function renderRingkasan(){
   const total = krama.length;
   const aktif = krama.filter(k=>k.status==='Aktif').length;
-  const totalDenda = krama.reduce((s,k)=>s+(Number(k.denda)||0),0);
+  const totalDenda = krama.reduce((s,k)=>s+totalDendaKrama(k),0);
   const pinjamanBerjalan = pinjaman.filter(p=>p.status!=='Lunas');
   const totalPokokBerjalan = pinjamanBerjalan.reduce((s,p)=>s+Number(p.jumlah),0);
   const totalSisaTagihan = pinjamanBerjalan.reduce((s,p)=>s+hitungSisa(p),0);
@@ -195,34 +218,42 @@ window.hapusKrama = async function(id){
 function renderDenda(){
   const tbody = document.getElementById('dendaTableBody');
   if(krama.length===0){
-    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama terlebih dahulu di tab Data Krama.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama terlebih dahulu di tab Data Krama.</div></td></tr>`;
     document.getElementById('totalDenda').textContent = rupiah(0);
     return;
   }
-  tbody.innerHTML = krama.map((k,i)=>`
+  tbody.innerHTML = krama.map((k,i)=>{
+    const otomatis = dendaOtomatis(k.id);
+    const total = totalDendaKrama(k);
+    return `
     <tr>
       <td>${i+1}</td>
       <td>${namaTampil(k)}</td>
       <td>${badgeStatus(k.status)}</td>
-      <td><input type="number" min="0" value="${k.denda||0}" onchange="updateDenda('${k.id}', this.value)"></td>
-    </tr>`).join('');
-  const total = krama.reduce((s,k)=>s+(Number(k.denda)||0),0);
+      <td><input type="number" min="0" value="${k.denda_manual||0}" onchange="updateDenda('${k.id}', this.value)"></td>
+      <td>${rupiah(otomatis)} <span style="color:var(--text-dim);font-size:11px;">(${jumlahTidakHadir(k.id)}x absen)</span></td>
+      <td><strong>${rupiah(total)}</strong></td>
+    </tr>`;
+  }).join('');
+  const total = krama.reduce((s,k)=>s+totalDendaKrama(k),0);
   document.getElementById('totalDenda').textContent = rupiah(total);
 }
 window.updateDenda = async function(id, val){
-  const {error} = await sb.from('krama').update({denda: Number(val)||0}).eq('id', id);
+  const {error} = await sb.from('krama').update({denda_manual: Number(val)||0}).eq('id', id);
   if(error){ alert('Gagal menyimpan denda: '+error.message); return; }
   await loadAll();
 };
 
-/* ---------- TUGAS KELOMPOK NGAYAH 1-8 ---------- */
+/* ---------- TUGAS KELOMPOK NGAYAH 1-8 (eksklusif: 1 krama = 1 kelompok) ---------- */
 function renderKelompok(){
   const grid = document.getElementById('kelompokGrid');
   grid.innerHTML = kelompok.map((kel)=>{
-    const anggotaOptions = krama.map(k=>{
-      const checked = kel.anggota.includes(k.id) ? 'checked' : '';
+    // hanya tampilkan krama yang belum masuk kelompok manapun, atau sudah masuk KELOMPOK INI
+    const tersedia = krama.filter(k => !k.kelompok_no || k.kelompok_no === kel.no);
+    const anggotaOptions = tersedia.map(k=>{
+      const checked = k.kelompok_no === kel.no ? 'checked' : '';
       return `<label class="anggota-item"><input type="checkbox" ${checked} onchange="toggleAnggota(${kel.no}, '${k.id}', this.checked)"> ${namaTeks(k)}</label>`;
-    }).join('') || `<div style="font-size:12.5px;color:var(--text-dim);padding:6px;">Belum ada krama.</div>`;
+    }).join('') || `<div style="font-size:12.5px;color:var(--text-dim);padding:6px;">Semua krama sudah masuk kelompok lain.</div>`;
     return `
       <div class="kelompok-card">
         <div class="kno"><span class="num">${kel.no}</span> Kelompok ${kel.no}</div>
@@ -233,12 +264,7 @@ function renderKelompok(){
   }).join('');
 }
 window.toggleAnggota = async function(kelompokNo, kramaId, checked){
-  let error;
-  if(checked){
-    ({error} = await sb.from('kelompok_anggota').insert({kelompok_no:kelompokNo, krama_id:kramaId}));
-  } else {
-    ({error} = await sb.from('kelompok_anggota').delete().eq('kelompok_no',kelompokNo).eq('krama_id',kramaId));
-  }
+  const {error} = await sb.from('krama').update({kelompok_no: checked ? kelompokNo : null}).eq('id', kramaId);
   if(error){ alert('Gagal menyimpan: '+error.message); }
   await loadAll();
 };
@@ -311,6 +337,68 @@ window.setGrup = async function(kramaId, grup){
     ({error} = await sb.from('pegebagan_group').upsert({krama_id:kramaId, grup}));
   }
   if(error){ alert('Gagal menyimpan: '+error.message); }
+  await loadAll();
+};
+
+/* ---------- ABSENSI PEGEBAGAN ---------- */
+function renderAbsensiForm(){
+  if(!document.getElementById('absensiTanggal').value) document.getElementById('absensiTanggal').value = todayStr();
+  const wrap = document.getElementById('absensiChecklist');
+  const anggotaGrup = krama.filter(k => grupab[k.id] === 'A' || grupab[k.id] === 'B');
+  if(anggotaGrup.length===0){
+    wrap.innerHTML = `<div style="font-size:12.5px;color:var(--text-dim);padding:6px;">Belum ada krama yang masuk Grup A/B. Atur dulu di tab Pegebagan Grup A/B.</div>`;
+    return;
+  }
+  wrap.innerHTML = anggotaGrup.map(k=>`
+    <label class="anggota-item">
+      <input type="checkbox" data-krama-id="${k.id}" class="absen-tidak-hadir">
+      Tidak Hadir — ${namaTeks(k)} <span class="badge ${grupab[k.id]==='A'?'groupA':'groupB'}" style="margin-left:6px;">Grup ${grupab[k.id]}</span>
+    </label>`).join('');
+}
+document.getElementById('absensiSaveBtn').addEventListener('click', async ()=>{
+  const tanggal = document.getElementById('absensiTanggal').value || todayStr();
+  const keterangan = document.getElementById('absensiKeterangan').value.trim();
+  const checkboxes = document.querySelectorAll('.absen-tidak-hadir');
+  if(checkboxes.length===0){ alert('Belum ada krama di Grup A/B untuk diabsen.'); return; }
+
+  const { data: sesi, error: e1 } = await sb.from('pegebagan_sesi').insert({tanggal, keterangan}).select().single();
+  if(e1){ alert('Gagal menyimpan sesi: '+e1.message); return; }
+
+  const rows = Array.from(checkboxes).map(cb=>({
+    sesi_id: sesi.id,
+    krama_id: cb.dataset.kramaId,
+    hadir: !cb.checked
+  }));
+  const { error: e2 } = await sb.from('pegebagan_absensi').insert(rows);
+  if(e2){ alert('Gagal menyimpan absensi: '+e2.message); return; }
+
+  document.getElementById('absensiKeterangan').value='';
+  await loadAll();
+});
+function renderAbsensiLog(){
+  const tbody = document.getElementById('absensiLogBody');
+  if(sesiPegebagan.length===0){
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="big">Belum ada absensi tercatat</div>Catat sesi pegebagan pertama melalui formulir di atas.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = sesiPegebagan.map(s=>{
+    const rows = absensiPegebagan.filter(a=>a.sesi_id===s.id);
+    const hadir = rows.filter(a=>a.hadir).length;
+    const tidakHadir = rows.filter(a=>!a.hadir).length;
+    return `
+      <tr>
+        <td>${s.tanggal}</td>
+        <td>${s.keterangan || '—'}</td>
+        <td>${hadir}</td>
+        <td>${tidakHadir > 0 ? `<strong>${tidakHadir}</strong> <span style="color:var(--text-dim);font-size:11px;">(${rupiah(tidakHadir*DENDA_PER_ABSEN)})</span>` : '0'}</td>
+        <td><button class="btn danger sm" onclick="hapusSesiAbsensi('${s.id}')">Hapus</button></td>
+      </tr>`;
+  }).join('');
+}
+window.hapusSesiAbsensi = async function(id){
+  if(!confirm('Hapus sesi absensi ini? Denda otomatis yang terkait juga akan hilang.')) return;
+  const {error} = await sb.from('pegebagan_sesi').delete().eq('id', id);
+  if(error){ alert('Gagal menghapus: '+error.message); return; }
   await loadAll();
 };
 
@@ -428,7 +516,10 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
 
   const kramaRows = krama.map((k,i)=>({
     'No': i+1, 'Nama Krama': k.nama, 'Alias/Panggilan': k.alias||'', 'Alamat / No. KK': k.alamat||'', 'Status': k.status,
-    'Denda Pegebagan (Rp)': Number(k.denda)||0
+    'Kelompok Ngayah': k.kelompok_no || '-',
+    'Denda Manual (Rp)': Number(k.denda_manual)||0,
+    'Denda Ketidakhadiran (Rp)': dendaOtomatis(k.id),
+    'Total Denda (Rp)': totalDendaKrama(k)
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(kramaRows.length?kramaRows:[{'No':'','Nama Krama':'(belum ada data)'}]), 'Data Krama & Denda');
 
@@ -449,6 +540,18 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
     'No': i+1, 'Nama Krama': k.nama, 'Status': k.status, 'Grup Pegebagan': grupab[k.id] || '-'
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(grupRows.length?grupRows:[{'No':'','Nama Krama':'(belum ada data)'}]), 'Pegebagan Grup A-B');
+
+  const absensiRows = [];
+  sesiPegebagan.forEach(s=>{
+    absensiPegebagan.filter(a=>a.sesi_id===s.id).forEach(a=>{
+      absensiRows.push({
+        'Tanggal': s.tanggal, 'Keterangan': s.keterangan || '-',
+        'Krama': namaKrama(a.krama_id), 'Kehadiran': a.hadir ? 'Hadir' : 'Tidak Hadir',
+        'Denda (Rp)': a.hadir ? 0 : DENDA_PER_ABSEN
+      });
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(absensiRows.length?absensiRows:[{'Tanggal':'','Keterangan':'(belum ada data)'}]), 'Absensi Pegebagan');
 
   const pinjamanRows = pinjaman.map(p=>{
     const siklus = siklusTumpek(p.tanggal);
