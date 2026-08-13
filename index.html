@@ -50,24 +50,29 @@
       </div>
 
       <div class="card" style="margin-bottom:18px;">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:4px;">Anggota Kelompok Ngayah 1–8</div>
-        <p class="section-sub" style="margin-bottom:14px;">Lihat cepat siapa saja di tiap kelompok, dan kapan terakhir bertugas — tanpa perlu buka tab lain.</p>
-        <div class="kelompok-grid" id="ringkasanKelompokGrid"></div>
+        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:4px;">Anggota Kelompok Ngayah</div>
+        <p class="section-sub" style="margin-bottom:14px;">Pilih kelompok untuk melihat anggotanya — memudahkan menginfokan giliran ke krama.</p>
+        <select id="ringkasanKelompokPilih" style="max-width:220px;margin-bottom:14px;">
+          <option value="1">Kelompok 1</option>
+          <option value="2">Kelompok 2</option>
+          <option value="3">Kelompok 3</option>
+          <option value="4">Kelompok 4</option>
+          <option value="5">Kelompok 5</option>
+          <option value="6">Kelompok 6</option>
+          <option value="7">Kelompok 7</option>
+          <option value="8">Kelompok 8</option>
+        </select>
+        <div id="ringkasanKelompokDetail"></div>
       </div>
 
       <div class="card">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:4px;">Anggota Pegebagan Grup A / B</div>
-        <p class="section-sub" style="margin-bottom:14px;">Daftar anggota tiap grup, untuk memudahkan menginfokan giliran ke krama.</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
-          <div>
-            <span class="badge groupA" style="margin-bottom:8px;display:inline-block;">Grup A</span>
-            <div id="ringkasanGrupAList"></div>
-          </div>
-          <div>
-            <span class="badge groupB" style="margin-bottom:8px;display:inline-block;">Grup B</span>
-            <div id="ringkasanGrupBList"></div>
-          </div>
-        </div>
+        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:4px;">Anggota Pegebagan Grup</div>
+        <p class="section-sub" style="margin-bottom:14px;">Pilih grup untuk melihat anggotanya.</p>
+        <select id="ringkasanGrupPilih" style="max-width:220px;margin-bottom:14px;">
+          <option value="A">Grup A</option>
+          <option value="B">Grup B</option>
+        </select>
+        <div id="ringkasanGrupDetail"></div>
       </div>
     </section>
 
