@@ -44,9 +44,30 @@
       <h2 class="section-title">Ringkasan Tempek</h2>
       <p class="section-sub">Gambaran umum krama, denda, dan pinjaman yang sedang berjalan.</p>
       <div class="grid-stats" id="statsGrid"></div>
-      <div class="card">
+      <div class="card" style="margin-bottom:18px;">
         <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:10px;">Sebaran Grup Pegebagan</div>
         <div id="ringkasanGrup" style="font-size:13.5px;color:var(--text-dim);"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:18px;">
+        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:4px;">Anggota Kelompok Ngayah 1–8</div>
+        <p class="section-sub" style="margin-bottom:14px;">Lihat cepat siapa saja di tiap kelompok, dan kapan terakhir bertugas — tanpa perlu buka tab lain.</p>
+        <div class="kelompok-grid" id="ringkasanKelompokGrid"></div>
+      </div>
+
+      <div class="card">
+        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:4px;">Anggota Pegebagan Grup A / B</div>
+        <p class="section-sub" style="margin-bottom:14px;">Daftar anggota tiap grup, untuk memudahkan menginfokan giliran ke krama.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+          <div>
+            <span class="badge groupA" style="margin-bottom:8px;display:inline-block;">Grup A</span>
+            <div id="ringkasanGrupAList"></div>
+          </div>
+          <div>
+            <span class="badge groupB" style="margin-bottom:8px;display:inline-block;">Grup B</span>
+            <div id="ringkasanGrupBList"></div>
+          </div>
+        </div>
       </div>
     </section>
 
