@@ -147,39 +147,44 @@ function tanggalIndo(iso){
   return `${Number(d)} ${bulan[Number(m)-1]} ${y}`;
 }
 function renderRingkasanKelompok(){
-  const grid = document.getElementById('ringkasanKelompokGrid');
-  if(!grid) return;
-  grid.innerHTML = kelompok.map(kel=>{
-    const anggota = kel.anggota.map(id=>{
-      const k = krama.find(x=>x.id===id);
-      return k ? namaTeks(k) : null;
-    }).filter(Boolean);
-    const terakhir = tugasLog.find(t=>t.kelompok_no===kel.no);
-    const infoTerakhir = terakhir
-      ? `<div class="count-pill">Terakhir: ${tanggalIndo(terakhir.tanggal)} · ${terakhir.jenis}</div>`
-      : `<div class="count-pill">Belum pernah bertugas</div>`;
-    return `
-      <div class="kelompok-card">
-        <div class="kno"><span class="num">${kel.no}</span> Kelompok ${kel.no}</div>
-        ${anggota.length
-          ? `<ul style="margin:0 0 8px;padding-left:18px;font-size:13px;line-height:1.7;">${anggota.map(n=>`<li>${n}</li>`).join('')}</ul>`
-          : `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:8px;">Belum ada anggota.</div>`}
-        ${infoTerakhir}
-      </div>`;
-  }).join('');
+  const detail = document.getElementById('ringkasanKelompokDetail');
+  const sel = document.getElementById('ringkasanKelompokPilih');
+  if(!detail || !sel) return;
+  const no = Number(sel.value || 1);
+  const kel = kelompok.find(k=>k.no===no);
+  if(!kel){ detail.innerHTML=''; return; }
+  const anggota = kel.anggota.map(id=>{
+    const k = krama.find(x=>x.id===id);
+    return k ? namaTeks(k) : null;
+  }).filter(Boolean);
+  const terakhir = tugasLog.find(t=>t.kelompok_no===no);
+  const infoTerakhir = terakhir
+    ? `<div class="count-pill">Terakhir: ${tanggalIndo(terakhir.tanggal)} · ${terakhir.jenis}</div>`
+    : `<div class="count-pill">Belum pernah bertugas</div>`;
+  detail.innerHTML = `
+    <div class="kelompok-card">
+      <div class="kno"><span class="num">${kel.no}</span> Kelompok ${kel.no}</div>
+      ${anggota.length
+        ? `<ul style="margin:0 0 8px;padding-left:18px;font-size:13px;line-height:1.7;">${anggota.map(n=>`<li>${n}</li>`).join('')}</ul>`
+        : `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:8px;">Belum ada anggota.</div>`}
+      ${infoTerakhir}
+    </div>`;
 }
+document.getElementById('ringkasanKelompokPilih').addEventListener('change', renderRingkasanKelompok);
+
 function renderRingkasanGrupAB(){
-  const listA = document.getElementById('ringkasanGrupAList');
-  const listB = document.getElementById('ringkasanGrupBList');
-  if(!listA || !listB) return;
-  const anggotaA = krama.filter(k=>grupab[k.id]==='A');
-  const anggotaB = krama.filter(k=>grupab[k.id]==='B');
-  const buatList = (arr) => arr.length
-    ? `<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">${arr.map(k=>`<li>${namaTeks(k)}</li>`).join('')}</ul>`
-    : `<div style="font-size:12.5px;color:var(--text-dim);">Belum ada anggota.</div>`;
-  listA.innerHTML = buatList(anggotaA);
-  listB.innerHTML = buatList(anggotaB);
+  const detail = document.getElementById('ringkasanGrupDetail');
+  const sel = document.getElementById('ringkasanGrupPilih');
+  if(!detail || !sel) return;
+  const grup = sel.value || 'A';
+  const anggota = krama.filter(k=>grupab[k.id]===grup);
+  detail.innerHTML = `
+    <span class="badge ${grup==='A'?'groupA':'groupB'}" style="margin-bottom:8px;display:inline-block;">Grup ${grup} · ${anggota.length} orang</span>
+    ${anggota.length
+      ? `<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">${anggota.map(k=>`<li>${namaTeks(k)}</li>`).join('')}</ul>`
+      : `<div style="font-size:12.5px;color:var(--text-dim);">Belum ada anggota.</div>`}`;
 }
+document.getElementById('ringkasanGrupPilih').addEventListener('change', renderRingkasanGrupAB);
 
 /* ---------- DATA KRAMA ---------- */
 function badgeStatus(s){
