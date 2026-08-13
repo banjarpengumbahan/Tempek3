@@ -100,6 +100,8 @@ function renderAll(){
   renderAbsensiLog();
   renderPinjamanSelect();
   renderPinjaman();
+  renderRingkasanKelompok();
+  renderRingkasanGrupAB();
 }
 
 /* ---------- TABS ---------- */
@@ -136,6 +138,47 @@ function renderRingkasan(){
     `<span class="badge groupA">Grup A: ${a} orang</span> &nbsp;
      <span class="badge groupB">Grup B: ${b} orang</span> &nbsp;
      <span style="color:var(--text-dim);">Belum ditentukan: ${belum} orang</span>`;
+}
+
+function tanggalIndo(iso){
+  if(!iso) return '';
+  const bulan = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const [y,m,d] = iso.split('-');
+  return `${Number(d)} ${bulan[Number(m)-1]} ${y}`;
+}
+function renderRingkasanKelompok(){
+  const grid = document.getElementById('ringkasanKelompokGrid');
+  if(!grid) return;
+  grid.innerHTML = kelompok.map(kel=>{
+    const anggota = kel.anggota.map(id=>{
+      const k = krama.find(x=>x.id===id);
+      return k ? namaTeks(k) : null;
+    }).filter(Boolean);
+    const terakhir = tugasLog.find(t=>t.kelompok_no===kel.no);
+    const infoTerakhir = terakhir
+      ? `<div class="count-pill">Terakhir: ${tanggalIndo(terakhir.tanggal)} · ${terakhir.jenis}</div>`
+      : `<div class="count-pill">Belum pernah bertugas</div>`;
+    return `
+      <div class="kelompok-card">
+        <div class="kno"><span class="num">${kel.no}</span> Kelompok ${kel.no}</div>
+        ${anggota.length
+          ? `<ul style="margin:0 0 8px;padding-left:18px;font-size:13px;line-height:1.7;">${anggota.map(n=>`<li>${n}</li>`).join('')}</ul>`
+          : `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:8px;">Belum ada anggota.</div>`}
+        ${infoTerakhir}
+      </div>`;
+  }).join('');
+}
+function renderRingkasanGrupAB(){
+  const listA = document.getElementById('ringkasanGrupAList');
+  const listB = document.getElementById('ringkasanGrupBList');
+  if(!listA || !listB) return;
+  const anggotaA = krama.filter(k=>grupab[k.id]==='A');
+  const anggotaB = krama.filter(k=>grupab[k.id]==='B');
+  const buatList = (arr) => arr.length
+    ? `<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">${arr.map(k=>`<li>${namaTeks(k)}</li>`).join('')}</ul>`
+    : `<div style="font-size:12.5px;color:var(--text-dim);">Belum ada anggota.</div>`;
+  listA.innerHTML = buatList(anggotaA);
+  listB.innerHTML = buatList(anggotaB);
 }
 
 /* ---------- DATA KRAMA ---------- */
