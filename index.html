@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tempek Banjar</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="top-inner">
+      <div class="brand">
+        <div class="brand-mark">T</div>
+        <div>
+          <h1>Tempek Banjar</h1>
+          <p>Pencatatan krama, pegebagan &amp; pinjaman</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="tempek-name" id="tempekLabel">memuat…</span>
+        <button class="btn ghost sm" id="exportBtn" style="background:transparent;border:1px solid var(--gold);color:var(--gold);">⭳ Ekspor Data (Excel)</button>
+      </div>
+    </div>
+  </header>
+  <div class="poleng"></div>
+  <div id="connError" class="conn-error hidden"></div>
+  <nav class="tabs">
+    <button data-view="ringkasan" class="active">Ringkasan</button>
+    <button data-view="krama">Data Krama</button>
+    <button data-view="denda">Denda Pegebagan</button>
+    <button data-view="tugas">Tugas Kelompok Ngayah 1–8</button>
+    <button data-view="grupab">Pegebagan Grup A/B</button>
+    <button data-view="pinjaman">Pinjaman Uang</button>
+  </nav>
+
+  <main>
+
+    <!-- RINGKASAN -->
+    <section class="view active" id="view-ringkasan">
+      <h2 class="section-title">Ringkasan Tempek</h2>
+      <p class="section-sub">Gambaran umum krama, denda, dan pinjaman yang sedang berjalan.</p>
+      <div class="grid-stats" id="statsGrid"></div>
+      <div class="card">
+        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:10px;">Sebaran Grup Pegebagan</div>
+        <div id="ringkasanGrup" style="font-size:13.5px;color:var(--text-dim);"></div>
+      </div>
+    </section>
+
+    <!-- DATA KRAMA -->
+    <section class="view" id="view-krama">
+      <h2 class="section-title">Data Krama</h2>
+      <p class="section-sub">Daftar seluruh krama tempek beserta status keanggotaannya.</p>
+      <div class="card" style="margin-bottom:18px;">
+        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Tambah / Ubah Krama</div>
+        <input type="hidden" id="kramaEditId">
+        <div class="form-row">
+          <div><label>Nama Krama</label><input id="kramaNama" placeholder="Contoh: I Made Sutrisna"></div>
+          <div><label>Alias / Panggilan</label><input id="kramaAlias" placeholder="Contoh: Made (opsional)"></div>
+          <div><label>Alamat / No. KK</label><input id="kramaAlamat" placeholder="Contoh: Br. Dinas..."></div>
+          <div><label>Status</label>
+            <select id="kramaStatus">
+              <option value="Aktif">Aktif</option>
+              <option value="Tidak Aktif">Tidak Aktif</option>
+              <option value="Pindah">Pindah</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn ghost" id="kramaCancelBtn">Batal</button>
+          <button class="btn gold" id="kramaSaveBtn">Simpan Krama</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="toolbar">
+          <input style="max-width:260px;" id="kramaSearch" placeholder="Cari nama krama...">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>No</th><th>Nama</th><th>Alamat</th><th>Status</th><th></th></tr></thead>
+            <tbody id="kramaTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- DENDA PEGEBAGAN -->
+    <section class="view" id="view-denda">
+      <h2 class="section-title">Denda Pegebagan</h2>
+      <p class="section-sub">Nominal denda diisi manual oleh pengurus untuk setiap krama.</p>
+      <div class="note">Kolom denda dapat diketik langsung, lalu tekan Enter atau klik di luar kolom untuk menyimpan.</div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>No</th><th>Nama Krama</th><th>Status</th><th style="width:180px;">Denda Pegebagan (Rp)</th></tr></thead>
+            <tbody id="dendaTableBody"></tbody>
+          </table>
+        </div>
+        <div style="text-align:right;margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:14px;">
+          Total Denda Terkumpul: <strong id="totalDenda">Rp 0</strong>
+        </div>
+      </div>
+    </section>
+
+    <!-- TUGAS KELOMPOK NGAYAH -->
+    <section class="view" id="view-tugas">
+      <h2 class="section-title">Tugas Kelompok Ngayah 1–8</h2>
+      <p class="section-sub">Anggota tiap kelompok, serta catatan tugas Ngejuk Celeng / Ngedasin Celeng yang ditentukan Ketua Tempek.</p>
+
+      <div class="kelompok-grid" id="kelompokGrid" style="margin-bottom:22px;"></div>
+
+      <div class="card" style="margin-bottom:18px;">
+        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Catat Tugas Ngayah</div>
+        <p class="section-sub" style="margin-bottom:14px;">Diisi oleh Ketua Tempek setiap kali menugaskan kelompok untuk ngejuk atau ngedasin celeng.</p>
+        <div class="form-row">
+          <div><label>Kelompok</label>
+            <select id="tugasKelompokNo">
+              <option value="1">Kelompok 1</option>
+              <option value="2">Kelompok 2</option>
+              <option value="3">Kelompok 3</option>
+              <option value="4">Kelompok 4</option>
+              <option value="5">Kelompok 5</option>
+              <option value="6">Kelompok 6</option>
+              <option value="7">Kelompok 7</option>
+              <option value="8">Kelompok 8</option>
+            </select>
+          </div>
+          <div><label>Jenis Tugas</label>
+            <select id="tugasJenis">
+              <option value="Ngejuk Celeng">Ngejuk Celeng</option>
+              <option value="Ngedasin Celeng">Ngedasin Celeng</option>
+            </select>
+          </div>
+          <div><label>Tanggal</label><input type="date" id="tugasTanggal"></div>
+        </div>
+        <div class="form-row" style="grid-template-columns:1fr;">
+          <div><label>Keterangan</label><input id="tugasKeterangan" placeholder="Contoh: persiapan piodalan di Pura..."></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn gold" id="tugasSaveBtn">Simpan Catatan Tugas</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Riwayat Tugas Ngayah</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tanggal</th><th>Kelompok</th><th>Jenis Tugas</th><th>Keterangan</th><th></th></tr></thead>
+            <tbody id="tugasLogBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- GRUP A/B -->
+    <section class="view" id="view-grupab">
+      <h2 class="section-title">Pembagian Pegebagan — Grup A / B</h2>
+      <p class="section-sub">Pembagian anggota ke Grup A atau Grup B, ditentukan oleh pengurus.</p>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>No</th><th>Nama Krama</th><th>Status</th><th style="width:150px;">Grup</th></tr></thead>
+            <tbody id="grupabTableBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:14px;font-size:13px;color:var(--text-dim);" id="grupabSummary"></div>
+      </div>
+    </section>
+
+    <!-- PINJAMAN -->
+    <section class="view" id="view-pinjaman">
+      <h2 class="section-title">Pinjaman Uang</h2>
+      <p class="section-sub">Jatuh tempo pembayaran setiap siklus Manis Tumpek (35 hari), bunga 2% per siklus dari pokok pinjaman.</p>
+      <div class="card" style="margin-bottom:18px;">
+        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Catat Pinjaman Baru</div>
+        <div class="form-row">
+          <div><label>Krama Peminjam</label><select id="pinjamKrama"></select></div>
+          <div><label>Jumlah Pinjaman (Rp)</label><input type="number" min="0" id="pinjamJumlah" placeholder="0"></div>
+          <div><label>Tanggal Pinjam</label><input type="date" id="pinjamTanggal"></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn gold" id="pinjamSaveBtn">Simpan Pinjaman</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Krama</th><th>Pokok</th><th>Tgl Pinjam</th><th>Siklus</th><th>Bunga (2%/siklus)</th>
+              <th>Sudah Dibayar</th><th>Sisa Tagihan</th><th>Status</th><th></th>
+            </tr></thead>
+            <tbody id="pinjamanTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+  <footer class="foot">Data tersimpan di Supabase — dapat dilihat &amp; diubah oleh siapa pun yang membuka aplikasi ini.</footer>
+</div>
+
+<div class="modal-bg hidden" id="modalBg">
+  <div class="modal">
+    <h3>Bayar Cicilan</h3>
+    <label>Jumlah Pembayaran (Rp)</label>
+    <input type="number" id="bayarJumlah" min="0" placeholder="0">
+    <div class="form-actions">
+      <button class="btn ghost" id="bayarCancel">Batal</button>
+      <button class="btn gold" id="bayarSimpan">Simpan Pembayaran</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
