@@ -671,7 +671,7 @@ function resetPenggunaForm(){
   document.getElementById('penggunaPassword').placeholder = 'Kosongkan kalau tidak diubah (saat edit)';
 }
 document.getElementById('penggunaSaveBtn').addEventListener('click', async ()=>{
-  const username = document.getElementById('penggunaUsername').value.trim();
+  const username = document.getElementById('penggunaUsername').value.trim().toLowerCase();
   const nama = document.getElementById('penggunaNama').value.trim();
   const role = document.getElementById('penggunaRole').value;
   const password = document.getElementById('penggunaPassword').value;
@@ -709,7 +709,7 @@ document.getElementById('loginPassword').addEventListener('keydown', (e)=>{ if(e
 document.getElementById('loginUsername').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
 
 async function doLogin(){
-  const username = document.getElementById('loginUsername').value.trim();
+  const username = document.getElementById('loginUsername').value.trim().toLowerCase();
   const password = document.getElementById('loginPassword').value;
   const errEl = document.getElementById('loginError');
   errEl.style.display='none';
