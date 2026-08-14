@@ -1,328 +1,757 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tempek Banjar</title>
-<link rel="stylesheet" href="style.css?v=4">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-</head>
-<body>
+// ============================================================
+// KONFIGURASI SUPABASE — GANTI DENGAN MILIK ANDA
+// Ambil dari Supabase Dashboard -> Project Settings -> API
+// ============================================================
+const SUPABASE_URL = 'https://zqblyipfwemwphaphmvn.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxYmx5aXBmd2Vtd3BoYXBobXZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MzEwNzgsImV4cCI6MjEwMjIwNzA3OH0.3j7aKY3xyJviQyQkkvYk6Ey4nRnHwnfVfhXtVci-q8I';
 
-<!-- LOGIN OVERLAY -->
-<div class="modal-bg" id="loginOverlay">
-  <div class="modal" style="max-width:360px;">
-    <h3>Masuk — Tempek Banjar</h3>
-    <p style="font-size:12.5px;color:var(--text-dim);margin:-6px 0 16px;">Hubungi admin atau kelian tempekan kalau belum punya akun.</p>
-    <label>Username</label>
-    <input id="loginUsername" placeholder="username" autocomplete="username">
-    <div style="height:10px;"></div>
-    <label>Password</label>
-    <input id="loginPassword" type="password" placeholder="password" autocomplete="current-password">
-    <div id="loginError" style="color:var(--clay);font-size:12.5px;margin-top:10px;display:none;"></div>
-    <div class="form-actions">
-      <button class="btn gold" id="loginBtn" style="width:100%;">Masuk</button>
-    </div>
-  </div>
-</div>
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-<div class="app" id="appRoot" style="display:none;">
-  <header class="top">
-    <div class="top-inner">
-      <div class="brand">
-        <div class="brand-mark">T</div>
-        <div>
-          <h1>Tempek Banjar</h1>
-          <p>Pencatatan krama, pegebagan &amp; pinjaman</p>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span class="tempek-name" id="tempekLabel">memuat…</span>
-        <span class="tempek-name" id="userBadge" style="display:none;"></span>
-        <button class="btn ghost sm" id="exportBtn" style="background:transparent;border:1px solid var(--gold);color:var(--gold);">⭳ Ekspor Data (Excel)</button>
-        <button class="btn ghost sm" id="logoutBtn" style="display:none;background:transparent;border:1px solid var(--clay);color:var(--clay);">Keluar</button>
-      </div>
-    </div>
-  </header>
-  <div class="poleng"></div>
-  <div id="connError" class="conn-error hidden"></div>
-  <nav class="tabs">
-    <button data-view="ringkasan" class="active">Ringkasan</button>
-    <button data-view="krama">Data Krama</button>
-    <button data-view="denda">Denda Pegebagan</button>
-    <button data-view="tugas">Tugas Kelompok Ngayah 1–8</button>
-    <button data-view="grupab">Pegebagan Grup A/B</button>
-    <button data-view="absensi">Absensi Pegebagan</button>
-    <button data-view="pinjaman">Pinjaman Uang</button>
-    <button data-view="pengguna" id="navPengguna" style="display:none;">Kelola Pengguna</button>
-  </nav>
+let krama = [];
+let kelompok = Array.from({length:8}, (_,i)=>({no:i+1, anggota:[]}));
+let tugasLog = [];
+let grupab = {};
+let pinjaman = [];
+let sesiPegebagan = [];
+let absensiPegebagan = [];
+let payingLoanId = null;
+let currentUser = null; // {username, password, role, nama} — disimpan di memori saja, hilang saat reload/logout
 
-  <main>
+const DENDA_PER_ABSEN = 10000;
 
-    <!-- RINGKASAN -->
-    <section class="view active" id="view-ringkasan">
-      <h2 class="section-title">Ringkasan Tempek</h2>
-      <p class="section-sub">Gambaran umum krama, denda, dan pinjaman yang sedang berjalan.</p>
-      <div class="grid-stats" id="statsGrid"></div>
-      <div class="card" style="margin-bottom:18px;">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:10px;">Sebaran Grup Pegebagan</div>
-        <div id="ringkasanGrup" style="font-size:13.5px;color:var(--text-dim);"></div>
-      </div>
+function rupiah(n){ n = Number(n)||0; return 'Rp ' + n.toLocaleString('id-ID'); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function jumlahTidakHadir(kramaId){
+  return absensiPegebagan.filter(a=>a.krama_id===kramaId && a.hadir===false).length;
+}
+function dendaOtomatis(kramaId){
+  return jumlahTidakHadir(kramaId) * DENDA_PER_ABSEN;
+}
+function totalDendaKrama(k){
+  return (Number(k.denda_manual)||0) + dendaOtomatis(k.id);
+}
 
-      <div class="card" style="margin-bottom:18px;">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:4px;">Anggota Kelompok Ngayah</div>
-        <p class="section-sub" style="margin-bottom:14px;">Pilih kelompok untuk melihat anggotanya — memudahkan menginfokan giliran ke krama.</p>
-        <select id="ringkasanKelompokPilih" style="max-width:220px;margin-bottom:14px;">
-          <option value="1">Kelompok 1</option>
-          <option value="2">Kelompok 2</option>
-          <option value="3">Kelompok 3</option>
-          <option value="4">Kelompok 4</option>
-          <option value="5">Kelompok 5</option>
-          <option value="6">Kelompok 6</option>
-          <option value="7">Kelompok 7</option>
-          <option value="8">Kelompok 8</option>
-        </select>
-        <div id="ringkasanKelompokDetail"></div>
-      </div>
+function showConnError(msg){
+  const el = document.getElementById('connError');
+  el.textContent = '⚠ ' + msg;
+  el.classList.remove('hidden');
+}
 
-      <div class="card">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:4px;">Anggota Pegebagan Grup</div>
-        <p class="section-sub" style="margin-bottom:14px;">Pilih grup untuk melihat anggotanya.</p>
-        <select id="ringkasanGrupPilih" style="max-width:220px;margin-bottom:14px;">
-          <option value="A">Grup A</option>
-          <option value="B">Grup B</option>
-        </select>
-        <div id="ringkasanGrupDetail"></div>
-      </div>
-    </section>
+/* ============================================================
+   MUAT SEMUA DATA DARI SUPABASE
+   ============================================================ */
+async function loadAll(){
+  if(SUPABASE_URL.startsWith('ISI_') || SUPABASE_ANON_KEY.startsWith('ISI_')){
+    showConnError('Konfigurasi Supabase belum diisi. Buka app.js dan isi SUPABASE_URL & SUPABASE_ANON_KEY.');
+    return;
+  }
+  try{
+    const { data: pengaturan } = await sb.from('pengaturan').select('*').eq('id',1).maybeSingle();
+    document.getElementById('tempekLabel').textContent = pengaturan?.nama_tempek || 'Tempek Banjar';
 
-    <!-- DATA KRAMA -->
-    <section class="view" id="view-krama">
-      <h2 class="section-title">Data Krama</h2>
-      <p class="section-sub">Daftar seluruh krama tempek beserta status keanggotaannya.</p>
-      <div class="card" style="margin-bottom:18px;">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Tambah / Ubah Krama</div>
-        <input type="hidden" id="kramaEditId">
-        <div class="form-row">
-          <div><label>Nama Krama</label><input id="kramaNama" placeholder="Contoh: I Made Sutrisna"></div>
-          <div><label>Alias / Panggilan</label><input id="kramaAlias" placeholder="Contoh: Made (opsional)"></div>
-          <div><label>Alamat / No. KK</label><input id="kramaAlamat" placeholder="Contoh: Br. Dinas..."></div>
-          <div><label>Status</label>
-            <select id="kramaStatus">
-              <option value="Aktif">Aktif</option>
-              <option value="Tidak Aktif">Tidak Aktif</option>
-              <option value="Pindah">Pindah</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-actions">
-          <button class="btn ghost" id="kramaCancelBtn">Batal</button>
-          <button class="btn gold" id="kramaSaveBtn">Simpan Krama</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="toolbar">
-          <input style="max-width:260px;" id="kramaSearch" placeholder="Cari nama krama...">
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>No</th><th>Nama</th><th>Alamat</th><th>Status</th><th></th></tr></thead>
-            <tbody id="kramaTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+    const { data: kramaData, error: e1 } = await sb.from('krama').select('*').order('nama', {ascending:true});
+    if(e1) throw e1;
+    krama = kramaData || [];
 
-    <!-- DENDA PEGEBAGAN -->
-    <section class="view" id="view-denda">
-      <h2 class="section-title">Denda Pegebagan</h2>
-      <p class="section-sub">Denda manual diisi pengurus. Denda ketidakhadiran terisi otomatis dari absensi (Rp 10.000/absen).</p>
-      <div class="note">Kolom "Denda Manual" dapat diketik langsung, lalu tekan Enter atau klik di luar kolom untuk menyimpan. Kolom "Denda Ketidakhadiran" terhitung otomatis, tidak bisa diubah langsung — ubah lewat tab Absensi Pegebagan.</div>
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>No</th><th>Nama Krama</th><th>Status</th><th style="width:160px;">Denda Manual (Rp)</th><th style="width:150px;">Denda Ketidakhadiran</th><th style="width:140px;">Total Denda</th></tr></thead>
-            <tbody id="dendaTableBody"></tbody>
-          </table>
-        </div>
-        <div style="text-align:right;margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:14px;">
-          Total Denda Terkumpul: <strong id="totalDenda">Rp 0</strong>
-        </div>
-      </div>
-    </section>
+    kelompok = Array.from({length:8}, (_,i)=>({no:i+1, anggota:[]}));
+    krama.forEach(k=>{
+      if(k.kelompok_no){
+        const kel = kelompok.find(x=>x.no===k.kelompok_no);
+        if(kel) kel.anggota.push(k.id);
+      }
+    });
 
-    <!-- TUGAS KELOMPOK NGAYAH -->
-    <section class="view" id="view-tugas">
-      <h2 class="section-title">Tugas Kelompok Ngayah 1–8</h2>
-      <p class="section-sub">Anggota tiap kelompok, serta catatan tugas Ngejuk Celeng / Ngedasin Celeng yang ditentukan Ketua Tempek.</p>
+    const { data: tugasData, error: e3 } = await sb.from('tugas_log').select('*').order('tanggal', {ascending:false});
+    if(e3) throw e3;
+    tugasLog = tugasData || [];
 
-      <div class="kelompok-grid" id="kelompokGrid" style="margin-bottom:22px;"></div>
+    const { data: grupData, error: e4 } = await sb.from('pegebagan_group').select('*');
+    if(e4) throw e4;
+    grupab = {};
+    (grupData||[]).forEach(row=>{ grupab[row.krama_id] = row.grup; });
 
-      <div class="card" style="margin-bottom:18px;">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Catat Tugas Ngayah</div>
-        <p class="section-sub" style="margin-bottom:14px;">Diisi oleh Ketua Tempek setiap kali menugaskan kelompok untuk ngejuk atau ngedasin celeng.</p>
-        <div class="form-row">
-          <div><label>Kelompok</label>
-            <select id="tugasKelompokNo">
-              <option value="1">Kelompok 1</option>
-              <option value="2">Kelompok 2</option>
-              <option value="3">Kelompok 3</option>
-              <option value="4">Kelompok 4</option>
-              <option value="5">Kelompok 5</option>
-              <option value="6">Kelompok 6</option>
-              <option value="7">Kelompok 7</option>
-              <option value="8">Kelompok 8</option>
-            </select>
-          </div>
-          <div><label>Jenis Tugas</label>
-            <select id="tugasJenis">
-              <option value="Ngejuk Celeng">Ngejuk Celeng</option>
-              <option value="Ngedasin Celeng">Ngedasin Celeng</option>
-            </select>
-          </div>
-          <div><label>Tanggal</label><input type="date" id="tugasTanggal"></div>
-        </div>
-        <div class="form-row" style="grid-template-columns:1fr;">
-          <div><label>Keterangan</label><input id="tugasKeterangan" placeholder="Contoh: persiapan piodalan di Pura..."></div>
-        </div>
-        <div class="form-actions">
-          <button class="btn gold" id="tugasSaveBtn">Simpan Catatan Tugas</button>
-        </div>
-      </div>
+    const { data: sesiData, error: e6 } = await sb.from('pegebagan_sesi').select('*').order('tanggal', {ascending:false});
+    if(e6) throw e6;
+    sesiPegebagan = sesiData || [];
 
-      <div class="card">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Riwayat Tugas Ngayah</div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Tanggal</th><th>Kelompok</th><th>Jenis Tugas</th><th>Keterangan</th><th></th></tr></thead>
-            <tbody id="tugasLogBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+    const { data: absensiData, error: e7 } = await sb.from('pegebagan_absensi').select('*');
+    if(e7) throw e7;
+    absensiPegebagan = absensiData || [];
 
-    <!-- GRUP A/B -->
-    <section class="view" id="view-grupab">
-      <h2 class="section-title">Pembagian Pegebagan — Grup A / B</h2>
-      <p class="section-sub">Pembagian anggota ke Grup A atau Grup B, ditentukan oleh pengurus.</p>
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>No</th><th>Nama Krama</th><th>Status</th><th style="width:150px;">Grup</th></tr></thead>
-            <tbody id="grupabTableBody"></tbody>
-          </table>
-        </div>
-        <div style="margin-top:14px;font-size:13px;color:var(--text-dim);" id="grupabSummary"></div>
-      </div>
-    </section>
+    const { data: pinjamanData, error: e5 } = await sb.from('pinjaman').select('*').order('tanggal', {ascending:false});
+    if(e5) throw e5;
+    pinjaman = pinjamanData || [];
 
-    <!-- ABSENSI PEGEBAGAN -->
-    <section class="view" id="view-absensi">
-      <h2 class="section-title">Absensi Pegebagan</h2>
-      <p class="section-sub">Pengurus mencatat kehadiran anggota Grup A/B setiap kegiatan pegebagan. Yang tidak hadir otomatis dikenai denda Rp 10.000.</p>
-      <div class="card" style="margin-bottom:18px;">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Catat Absensi Baru</div>
-        <div class="form-row">
-          <div><label>Tanggal Kegiatan</label><input type="date" id="absensiTanggal"></div>
-          <div><label>Keterangan</label><input id="absensiKeterangan" placeholder="Contoh: pegebagan piodalan..."></div>
-        </div>
-        <label style="margin-top:6px;">Kehadiran Anggota Grup A/B</label>
-        <div class="note" id="absensiNote" style="margin-bottom:10px;">Centang "Tidak Hadir" untuk krama yang absen — otomatis kena denda Rp 10.000 per absen saat disimpan.</div>
-        <div class="anggota-list" id="absensiChecklist" style="max-height:320px;"></div>
-        <div class="form-actions">
-          <button class="btn gold" id="absensiSaveBtn">Simpan Absensi</button>
-        </div>
-      </div>
-      <div class="card">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Riwayat Absensi Pegebagan</div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Tanggal</th><th>Keterangan</th><th>Hadir</th><th>Tidak Hadir</th><th></th></tr></thead>
-            <tbody id="absensiLogBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+    document.getElementById('connError').classList.add('hidden');
+    renderAll();
+  }catch(err){
+    console.error(err);
+    showConnError('Gagal terhubung ke Supabase: ' + (err.message||err) + '. Cek URL/key, dan pastikan skema SQL sudah dijalankan.');
+  }
+}
 
-    <!-- PINJAMAN -->
-    <section class="view" id="view-pinjaman">
-      <h2 class="section-title">Pinjaman Uang</h2>
-      <p class="section-sub">Jatuh tempo pembayaran setiap siklus Manis Tumpek (35 hari), bunga 2% per siklus dari pokok pinjaman.</p>
-      <div class="card" style="margin-bottom:18px;">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Catat Pinjaman Baru</div>
-        <div class="form-row">
-          <div><label>Krama Peminjam</label><select id="pinjamKrama"></select></div>
-          <div><label>Jumlah Pinjaman (Rp)</label><input type="number" min="0" id="pinjamJumlah" placeholder="0"></div>
-          <div><label>Tanggal Pinjam</label><input type="date" id="pinjamTanggal"></div>
-        </div>
-        <div class="form-actions">
-          <button class="btn gold" id="pinjamSaveBtn">Simpan Pinjaman</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead><tr>
-              <th>Krama</th><th>Pokok</th><th>Tgl Pinjam</th><th>Siklus</th><th>Bunga (2%/siklus)</th>
-              <th>Sudah Dibayar</th><th>Sisa Tagihan</th><th>Status</th><th></th>
-            </tr></thead>
-            <tbody id="pinjamanTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+function renderAll(){
+  renderRingkasan();
+  renderKrama();
+  renderDenda();
+  renderKelompok();
+  renderTugasLog();
+  renderGrupAB();
+  renderAbsensiForm();
+  renderAbsensiLog();
+  renderPinjamanSelect();
+  renderPinjaman();
+  renderRingkasanKelompok();
+  renderRingkasanGrupAB();
+}
 
-    <!-- KELOLA PENGGUNA -->
-    <section class="view" id="view-pengguna">
-      <h2 class="section-title">Kelola Pengguna</h2>
-      <p class="section-sub">Hanya admin dan kelian tempekan yang bisa membuat akun baru dan mengubah password.</p>
-      <div class="card" style="margin-bottom:18px;">
-        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Tambah / Ubah Akun Pengurus</div>
-        <div class="form-row">
-          <div><label>Username</label><input id="penggunaUsername" placeholder="mis. bendahara1"></div>
-          <div><label>Nama</label><input id="penggunaNama" placeholder="Nama pengurus"></div>
-          <div><label>Role</label>
-            <select id="penggunaRole">
-              <option value="pengurus">Pengurus</option>
-              <option value="kelian">Kelian Tempekan</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div><label>Password</label><input id="penggunaPassword" type="password" placeholder="Kosongkan kalau tidak diubah (saat edit)"></div>
-        </div>
-        <div class="form-actions">
-          <button class="btn ghost" id="penggunaCancelBtn">Batal</button>
-          <button class="btn gold" id="penggunaSaveBtn">Simpan Akun</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Username</th><th>Nama</th><th>Role</th><th></th></tr></thead>
-            <tbody id="penggunaTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+/* ---------- TABS ---------- */
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+  });
+});
 
-  </main>
-  <footer class="foot">Data tersimpan di Supabase — dapat dilihat &amp; diubah oleh siapa pun yang membuka aplikasi ini.</footer>
-</div>
+/* ---------- RINGKASAN ---------- */
+function renderRingkasan(){
+  const total = krama.length;
+  const aktif = krama.filter(k=>k.status==='Aktif').length;
+  const totalDenda = krama.reduce((s,k)=>s+totalDendaKrama(k),0);
+  const pinjamanBerjalan = pinjaman.filter(p=>p.status!=='Lunas');
+  const totalPokokBerjalan = pinjamanBerjalan.reduce((s,p)=>s+Number(p.jumlah),0);
+  const totalSisaTagihan = pinjamanBerjalan.reduce((s,p)=>s+hitungSisa(p),0);
 
-<div class="modal-bg hidden" id="modalBg">
-  <div class="modal">
-    <h3>Bayar Cicilan</h3>
-    <label>Jumlah Pembayaran (Rp)</label>
-    <input type="number" id="bayarJumlah" min="0" placeholder="0">
-    <div class="form-actions">
-      <button class="btn ghost" id="bayarCancel">Batal</button>
-      <button class="btn gold" id="bayarSimpan">Simpan Pembayaran</button>
-    </div>
-  </div>
-</div>
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat accent-gold"><div class="label">Total Krama</div><div class="value">${total}</div></div>
+    <div class="stat accent-green"><div class="label">Krama Aktif</div><div class="value">${aktif}</div></div>
+    <div class="stat accent-clay"><div class="label">Total Denda Pegebagan</div><div class="value" style="font-size:19px;">${rupiah(totalDenda)}</div></div>
+    <div class="stat accent-gold"><div class="label">Pinjaman Berjalan</div><div class="value" style="font-size:19px;">${rupiah(totalPokokBerjalan)}</div></div>
+    <div class="stat accent-clay"><div class="label">Total Sisa Tagihan (+bunga)</div><div class="value" style="font-size:19px;">${rupiah(totalSisaTagihan)}</div></div>
+  `;
 
-<script src="app.js?v=4"></script>
-</body>
-</html>
+  const a = Object.values(grupab).filter(g=>g==='A').length;
+  const b = Object.values(grupab).filter(g=>g==='B').length;
+  const belum = total - a - b;
+  document.getElementById('ringkasanGrup').innerHTML =
+    `<span class="badge groupA">Grup A: ${a} orang</span> &nbsp;
+     <span class="badge groupB">Grup B: ${b} orang</span> &nbsp;
+     <span style="color:var(--text-dim);">Belum ditentukan: ${belum} orang</span>`;
+}
+
+function tanggalIndo(iso){
+  if(!iso) return '';
+  const bulan = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const [y,m,d] = iso.split('-');
+  return `${Number(d)} ${bulan[Number(m)-1]} ${y}`;
+}
+function renderRingkasanKelompok(){
+  const detail = document.getElementById('ringkasanKelompokDetail');
+  const sel = document.getElementById('ringkasanKelompokPilih');
+  if(!detail || !sel) return;
+  const no = Number(sel.value || 1);
+  const kel = kelompok.find(k=>k.no===no);
+  if(!kel){ detail.innerHTML=''; return; }
+  const anggota = kel.anggota.map(id=>{
+    const k = krama.find(x=>x.id===id);
+    return k ? namaTeks(k) : null;
+  }).filter(Boolean);
+  const terakhir = tugasLog.find(t=>t.kelompok_no===no);
+  const infoTerakhir = terakhir
+    ? `<div class="count-pill">Terakhir: ${tanggalIndo(terakhir.tanggal)} · ${terakhir.jenis}</div>`
+    : `<div class="count-pill">Belum pernah bertugas</div>`;
+  detail.innerHTML = `
+    <div class="kelompok-card">
+      <div class="kno"><span class="num">${kel.no}</span> Kelompok ${kel.no}</div>
+      ${anggota.length
+        ? `<ul style="margin:0 0 8px;padding-left:18px;font-size:13px;line-height:1.7;">${anggota.map(n=>`<li>${n}</li>`).join('')}</ul>`
+        : `<div style="font-size:12.5px;color:var(--text-dim);margin-bottom:8px;">Belum ada anggota.</div>`}
+      ${infoTerakhir}
+    </div>`;
+}
+document.getElementById('ringkasanKelompokPilih').addEventListener('change', renderRingkasanKelompok);
+
+function renderRingkasanGrupAB(){
+  const detail = document.getElementById('ringkasanGrupDetail');
+  const sel = document.getElementById('ringkasanGrupPilih');
+  if(!detail || !sel) return;
+  const grup = sel.value || 'A';
+  const anggota = krama.filter(k=>grupab[k.id]===grup);
+  detail.innerHTML = `
+    <span class="badge ${grup==='A'?'groupA':'groupB'}" style="margin-bottom:8px;display:inline-block;">Grup ${grup} · ${anggota.length} orang</span>
+    ${anggota.length
+      ? `<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">${anggota.map(k=>`<li>${namaTeks(k)}</li>`).join('')}</ul>`
+      : `<div style="font-size:12.5px;color:var(--text-dim);">Belum ada anggota.</div>`}`;
+}
+document.getElementById('ringkasanGrupPilih').addEventListener('change', renderRingkasanGrupAB);
+
+/* ---------- DATA KRAMA ---------- */
+function badgeStatus(s){
+  const cls = s==='Aktif'?'aktif':(s==='Pindah'?'pindah':'tidak');
+  return `<span class="badge ${cls}">${s}</span>`;
+}
+function namaTampil(k){
+  return k.alias ? `${k.nama} <span style="color:var(--text-dim);font-weight:400;">(${k.alias})</span>` : k.nama;
+}
+function namaTeks(k){
+  return k.alias ? `${k.nama} (${k.alias})` : k.nama;
+}
+
+document.getElementById('kramaSaveBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('kramaEditId').value;
+  const nama = document.getElementById('kramaNama').value.trim();
+  const alias = document.getElementById('kramaAlias').value.trim();
+  const alamat = document.getElementById('kramaAlamat').value.trim();
+  const status = document.getElementById('kramaStatus').value;
+  if(!nama){ alert('Nama krama wajib diisi.'); return; }
+  let error;
+  if(id){
+    ({error} = await sb.from('krama').update({nama, alias, alamat, status}).eq('id', id));
+  } else {
+    ({error} = await sb.from('krama').insert({nama, alias, alamat, status, denda:0}));
+  }
+  if(error){ alert('Gagal menyimpan: '+error.message); return; }
+  resetKramaForm();
+  await loadAll();
+});
+document.getElementById('kramaCancelBtn').addEventListener('click', resetKramaForm);
+function resetKramaForm(){
+  document.getElementById('kramaEditId').value='';
+  document.getElementById('kramaNama').value='';
+  document.getElementById('kramaAlias').value='';
+  document.getElementById('kramaAlamat').value='';
+  document.getElementById('kramaStatus').value='Aktif';
+}
+document.getElementById('kramaSearch').addEventListener('input', renderKrama);
+
+function renderKrama(){
+  const q = (document.getElementById('kramaSearch').value||'').toLowerCase();
+  const tbody = document.getElementById('kramaTableBody');
+  const list = krama.filter(k=>k.nama.toLowerCase().includes(q));
+  if(list.length===0){
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama pertama melalui formulir di atas.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map((k,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td>${namaTampil(k)}</td>
+      <td>${k.alamat||'—'}</td>
+      <td>${badgeStatus(k.status)}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn ghost sm" onclick="editKrama('${k.id}')">Ubah</button>
+        <button class="btn danger sm" onclick="hapusKrama('${k.id}')">Hapus</button>
+      </td>
+    </tr>`).join('');
+}
+window.editKrama = function(id){
+  const k = krama.find(x=>x.id===id); if(!k) return;
+  document.getElementById('kramaEditId').value = k.id;
+  document.getElementById('kramaNama').value = k.nama;
+  document.getElementById('kramaAlias').value = k.alias||'';
+  document.getElementById('kramaAlamat').value = k.alamat||'';
+  document.getElementById('kramaStatus').value = k.status;
+  document.querySelector('[data-view="krama"]').click();
+  window.scrollTo({top:0,behavior:'smooth'});
+};
+window.hapusKrama = async function(id){
+  if(!confirm('Hapus krama ini? Data kelompok & grup pegebagan terkait ikut terhapus. Riwayat pinjaman tetap tersimpan.')) return;
+  const {error} = await sb.from('krama').delete().eq('id', id);
+  if(error){ alert('Gagal menghapus: '+error.message); return; }
+  await loadAll();
+};
+
+/* ---------- DENDA PEGEBAGAN ---------- */
+function renderDenda(){
+  const tbody = document.getElementById('dendaTableBody');
+  if(krama.length===0){
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama terlebih dahulu di tab Data Krama.</div></td></tr>`;
+    document.getElementById('totalDenda').textContent = rupiah(0);
+    return;
+  }
+  tbody.innerHTML = krama.map((k,i)=>{
+    const otomatis = dendaOtomatis(k.id);
+    const total = totalDendaKrama(k);
+    return `
+    <tr>
+      <td>${i+1}</td>
+      <td>${namaTampil(k)}</td>
+      <td>${badgeStatus(k.status)}</td>
+      <td><input type="number" min="0" value="${k.denda_manual||0}" onchange="updateDenda('${k.id}', this.value)"></td>
+      <td>${rupiah(otomatis)} <span style="color:var(--text-dim);font-size:11px;">(${jumlahTidakHadir(k.id)}x absen)</span></td>
+      <td><strong>${rupiah(total)}</strong></td>
+    </tr>`;
+  }).join('');
+  const total = krama.reduce((s,k)=>s+totalDendaKrama(k),0);
+  document.getElementById('totalDenda').textContent = rupiah(total);
+}
+window.updateDenda = async function(id, val){
+  const {error} = await sb.from('krama').update({denda_manual: Number(val)||0}).eq('id', id);
+  if(error){ alert('Gagal menyimpan denda: '+error.message); return; }
+  await loadAll();
+};
+
+/* ---------- TUGAS KELOMPOK NGAYAH 1-8 (eksklusif: 1 krama = 1 kelompok) ---------- */
+function renderKelompok(){
+  const grid = document.getElementById('kelompokGrid');
+  grid.innerHTML = kelompok.map((kel)=>{
+    // hanya tampilkan krama yang belum masuk kelompok manapun, atau sudah masuk KELOMPOK INI
+    const tersedia = krama.filter(k => !k.kelompok_no || k.kelompok_no === kel.no);
+    const anggotaOptions = tersedia.map(k=>{
+      const checked = k.kelompok_no === kel.no ? 'checked' : '';
+      return `<label class="anggota-item"><input type="checkbox" ${checked} onchange="toggleAnggota(${kel.no}, '${k.id}', this.checked)"> ${namaTeks(k)}</label>`;
+    }).join('') || `<div style="font-size:12.5px;color:var(--text-dim);padding:6px;">Semua krama sudah masuk kelompok lain.</div>`;
+    return `
+      <div class="kelompok-card">
+        <div class="kno"><span class="num">${kel.no}</span> Kelompok ${kel.no}</div>
+        <label>Anggota</label>
+        <div class="anggota-list">${anggotaOptions}</div>
+        <div class="count-pill">${kel.anggota.length} anggota</div>
+      </div>`;
+  }).join('');
+}
+window.toggleAnggota = async function(kelompokNo, kramaId, checked){
+  const {error} = await sb.from('krama').update({kelompok_no: checked ? kelompokNo : null}).eq('id', kramaId);
+  if(error){ alert('Gagal menyimpan: '+error.message); }
+  await loadAll();
+};
+
+document.getElementById('tugasSaveBtn').addEventListener('click', async ()=>{
+  const kelompok_no = Number(document.getElementById('tugasKelompokNo').value);
+  const jenis = document.getElementById('tugasJenis').value;
+  const tanggal = document.getElementById('tugasTanggal').value || todayStr();
+  const keterangan = document.getElementById('tugasKeterangan').value.trim();
+  const {error} = await sb.from('tugas_log').insert({kelompok_no, jenis, tanggal, keterangan});
+  if(error){ alert('Gagal menyimpan: '+error.message); return; }
+  document.getElementById('tugasKeterangan').value='';
+  await loadAll();
+});
+function renderTugasLog(){
+  if(!document.getElementById('tugasTanggal').value) document.getElementById('tugasTanggal').value = todayStr();
+  const tbody = document.getElementById('tugasLogBody');
+  if(tugasLog.length===0){
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="big">Belum ada catatan tugas</div>Catat penugasan pertama melalui formulir di atas.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = tugasLog.map(t=>`
+    <tr>
+      <td>${t.tanggal}</td>
+      <td>Kelompok ${t.kelompok_no}</td>
+      <td><span class="badge ${t.jenis==='Ngejuk Celeng'?'berjalan':'groupB'}">${t.jenis}</span></td>
+      <td>${t.keterangan || '—'}</td>
+      <td><button class="btn danger sm" onclick="hapusTugasLog('${t.id}')">Hapus</button></td>
+    </tr>`).join('');
+}
+window.hapusTugasLog = async function(id){
+  if(!confirm('Hapus catatan tugas ini?')) return;
+  const {error} = await sb.from('tugas_log').delete().eq('id', id);
+  if(error){ alert('Gagal menghapus: '+error.message); return; }
+  await loadAll();
+};
+
+/* ---------- GRUP A/B ---------- */
+function renderGrupAB(){
+  const tbody = document.getElementById('grupabTableBody');
+  if(krama.length===0){
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama terlebih dahulu di tab Data Krama.</div></td></tr>`;
+    document.getElementById('grupabSummary').textContent='';
+    return;
+  }
+  tbody.innerHTML = krama.map((k,i)=>{
+    const g = grupab[k.id] || '';
+    return `
+    <tr>
+      <td>${i+1}</td>
+      <td>${namaTampil(k)}</td>
+      <td>${badgeStatus(k.status)}</td>
+      <td>
+        <div class="toggleAB">
+          <button class="sel-a ${g==='A'?'on':''}" onclick="setGrup('${k.id}','A')">A</button>
+          <button class="sel-b ${g==='B'?'on':''}" onclick="setGrup('${k.id}','B')">B</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  const a = Object.values(grupab).filter(g=>g==='A').length;
+  const b = Object.values(grupab).filter(g=>g==='B').length;
+  document.getElementById('grupabSummary').innerHTML = `Grup A: <strong>${a}</strong> orang &nbsp;•&nbsp; Grup B: <strong>${b}</strong> orang`;
+}
+window.setGrup = async function(kramaId, grup){
+  let error;
+  if(grupab[kramaId]===grup){
+    ({error} = await sb.from('pegebagan_group').delete().eq('krama_id', kramaId));
+  } else {
+    ({error} = await sb.from('pegebagan_group').upsert({krama_id:kramaId, grup}));
+  }
+  if(error){ alert('Gagal menyimpan: '+error.message); }
+  await loadAll();
+};
+
+/* ---------- ABSENSI PEGEBAGAN ---------- */
+function renderAbsensiForm(){
+  if(!document.getElementById('absensiTanggal').value) document.getElementById('absensiTanggal').value = todayStr();
+  const wrap = document.getElementById('absensiChecklist');
+  const anggotaGrup = krama.filter(k => grupab[k.id] === 'A' || grupab[k.id] === 'B');
+  if(anggotaGrup.length===0){
+    wrap.innerHTML = `<div style="font-size:12.5px;color:var(--text-dim);padding:6px;">Belum ada krama yang masuk Grup A/B. Atur dulu di tab Pegebagan Grup A/B.</div>`;
+    return;
+  }
+  wrap.innerHTML = anggotaGrup.map(k=>`
+    <label class="anggota-item">
+      <input type="checkbox" data-krama-id="${k.id}" class="absen-tidak-hadir">
+      Tidak Hadir — ${namaTeks(k)} <span class="badge ${grupab[k.id]==='A'?'groupA':'groupB'}" style="margin-left:6px;">Grup ${grupab[k.id]}</span>
+    </label>`).join('');
+}
+document.getElementById('absensiSaveBtn').addEventListener('click', async ()=>{
+  const tanggal = document.getElementById('absensiTanggal').value || todayStr();
+  const keterangan = document.getElementById('absensiKeterangan').value.trim();
+  const checkboxes = document.querySelectorAll('.absen-tidak-hadir');
+  if(checkboxes.length===0){ alert('Belum ada krama di Grup A/B untuk diabsen.'); return; }
+
+  const { data: sesi, error: e1 } = await sb.from('pegebagan_sesi').insert({tanggal, keterangan}).select().single();
+  if(e1){ alert('Gagal menyimpan sesi: '+e1.message); return; }
+
+  const rows = Array.from(checkboxes).map(cb=>({
+    sesi_id: sesi.id,
+    krama_id: cb.dataset.kramaId,
+    hadir: !cb.checked
+  }));
+  const { error: e2 } = await sb.from('pegebagan_absensi').insert(rows);
+  if(e2){ alert('Gagal menyimpan absensi: '+e2.message); return; }
+
+  document.getElementById('absensiKeterangan').value='';
+  await loadAll();
+});
+function renderAbsensiLog(){
+  const tbody = document.getElementById('absensiLogBody');
+  if(sesiPegebagan.length===0){
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="big">Belum ada absensi tercatat</div>Catat sesi pegebagan pertama melalui formulir di atas.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = sesiPegebagan.map(s=>{
+    const rows = absensiPegebagan.filter(a=>a.sesi_id===s.id);
+    const hadir = rows.filter(a=>a.hadir).length;
+    const tidakHadir = rows.filter(a=>!a.hadir).length;
+    return `
+      <tr>
+        <td>${s.tanggal}</td>
+        <td>${s.keterangan || '—'}</td>
+        <td>${hadir}</td>
+        <td>${tidakHadir > 0 ? `<strong>${tidakHadir}</strong> <span style="color:var(--text-dim);font-size:11px;">(${rupiah(tidakHadir*DENDA_PER_ABSEN)})</span>` : '0'}</td>
+        <td><button class="btn danger sm" onclick="hapusSesiAbsensi('${s.id}')">Hapus</button></td>
+      </tr>`;
+  }).join('');
+}
+window.hapusSesiAbsensi = async function(id){
+  if(!confirm('Hapus sesi absensi ini? Denda otomatis yang terkait juga akan hilang.')) return;
+  const {error} = await sb.from('pegebagan_sesi').delete().eq('id', id);
+  if(error){ alert('Gagal menghapus: '+error.message); return; }
+  await loadAll();
+};
+
+/* ---------- PINJAMAN ---------- */
+function renderPinjamanSelect(){
+  const sel = document.getElementById('pinjamKrama');
+  sel.innerHTML = krama.map(k=>`<option value="${k.id}">${namaTeks(k)}</option>`).join('') || `<option value="">Belum ada krama</option>`;
+  if(!document.getElementById('pinjamTanggal').value) document.getElementById('pinjamTanggal').value = todayStr();
+}
+document.getElementById('pinjamSaveBtn').addEventListener('click', async ()=>{
+  const kramaId = document.getElementById('pinjamKrama').value;
+  const jumlah = Number(document.getElementById('pinjamJumlah').value);
+  const tanggal = document.getElementById('pinjamTanggal').value || todayStr();
+  if(!kramaId){ alert('Tambahkan krama terlebih dahulu.'); return; }
+  if(!jumlah || jumlah<=0){ alert('Jumlah pinjaman harus lebih dari 0.'); return; }
+  const {error} = await sb.from('pinjaman').insert({krama_id:kramaId, jumlah, tanggal, dibayar:0, status:'Berjalan'});
+  if(error){ alert('Gagal menyimpan: '+error.message); return; }
+  document.getElementById('pinjamJumlah').value='';
+  await loadAll();
+});
+
+function siklusTumpek(tanggalPinjam){
+  const hariBerlalu = Math.floor((Date.now() - new Date(tanggalPinjam).getTime()) / (1000*60*60*24));
+  return Math.max(0, Math.floor(hariBerlalu/35));
+}
+function hitungBunga(p){
+  return Math.round(Number(p.jumlah) * 0.02 * siklusTumpek(p.tanggal));
+}
+function hitungSisa(p){
+  const total = Number(p.jumlah) + hitungBunga(p) - Number(p.dibayar||0);
+  return Math.max(0, total);
+}
+function ringSVG(){
+  const r=13, c=2*Math.PI*r;
+  return `<svg class="ring" viewBox="0 0 34 34"><circle class="bg" cx="17" cy="17" r="${r}"></circle>
+    <circle class="fg" cx="17" cy="17" r="${r}" stroke-dasharray="${c}" stroke-dashoffset="0"></circle></svg>`;
+}
+
+function renderPinjaman(){
+  const tbody = document.getElementById('pinjamanTableBody');
+  if(pinjaman.length===0){
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="big">Belum ada pinjaman</div>Catat pinjaman baru melalui formulir di atas.</div></td></tr>`;
+    return;
+  }
+  let needsLunasUpdate = [];
+  const rows = pinjaman.map(p=>{
+    const k = krama.find(x=>x.id===p.krama_id);
+    const siklus = siklusTumpek(p.tanggal);
+    const bunga = hitungBunga(p);
+    const sisa = hitungSisa(p);
+    if(sisa<=0 && p.status!=='Lunas') needsLunasUpdate.push(p.id);
+    return `
+      <tr>
+        <td>${k? namaTampil(k) : '(krama dihapus)'}</td>
+        <td>${rupiah(p.jumlah)}</td>
+        <td>${p.tanggal}</td>
+        <td><div class="ring-wrap">${ringSVG()}<span class="ring-label">${siklus}×</span></div></td>
+        <td>${rupiah(bunga)}</td>
+        <td>${rupiah(p.dibayar||0)}</td>
+        <td><strong>${rupiah(sisa)}</strong></td>
+        <td>${p.status==='Lunas' ? '<span class="badge lunas">Lunas</span>' : '<span class="badge berjalan">Berjalan</span>'}</td>
+        <td style="white-space:nowrap;">
+          ${p.status!=='Lunas' ? `<button class="btn gold sm" onclick="bukaBayar('${p.id}')">Bayar</button>` : ''}
+          <button class="btn danger sm" onclick="hapusPinjaman('${p.id}')">Hapus</button>
+        </td>
+      </tr>`;
+  }).join('');
+  tbody.innerHTML = rows;
+
+  if(needsLunasUpdate.length){
+    (async ()=>{
+      for(const id of needsLunasUpdate){
+        await sb.from('pinjaman').update({status:'Lunas'}).eq('id', id);
+      }
+    })();
+  }
+}
+window.hapusPinjaman = async function(id){
+  if(!confirm('Hapus catatan pinjaman ini?')) return;
+  const {error} = await sb.from('pinjaman').delete().eq('id', id);
+  if(error){ alert('Gagal menghapus: '+error.message); return; }
+  await loadAll();
+};
+window.bukaBayar = function(id){
+  payingLoanId = id;
+  document.getElementById('bayarJumlah').value='';
+  document.getElementById('modalBg').classList.remove('hidden');
+};
+document.getElementById('bayarCancel').addEventListener('click', ()=>{
+  document.getElementById('modalBg').classList.add('hidden');
+  payingLoanId=null;
+});
+document.getElementById('bayarSimpan').addEventListener('click', async ()=>{
+  const val = Number(document.getElementById('bayarJumlah').value);
+  if(!val || val<=0){ alert('Masukkan jumlah pembayaran.'); return; }
+  const p = pinjaman.find(x=>x.id===payingLoanId);
+  if(p){
+    const dibayarBaru = Number(p.dibayar||0) + val;
+    const statusBaru = hitungSisa({...p, dibayar:dibayarBaru})<=0 ? 'Lunas' : 'Berjalan';
+    const {error} = await sb.from('pinjaman').update({dibayar: dibayarBaru, status: statusBaru}).eq('id', p.id);
+    if(error){ alert('Gagal menyimpan pembayaran: '+error.message); return; }
+  }
+  document.getElementById('modalBg').classList.add('hidden');
+  payingLoanId=null;
+  await loadAll();
+});
+
+/* ---------- EKSPOR EXCEL ---------- */
+function namaKrama(id){ const k = krama.find(x=>x.id===id); return k ? namaTeks(k) : '(krama dihapus)'; }
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  if(typeof XLSX === 'undefined'){ alert('Modul ekspor belum siap, coba lagi sebentar.'); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  const kramaRows = krama.map((k,i)=>({
+    'No': i+1, 'Nama Krama': k.nama, 'Alias/Panggilan': k.alias||'', 'Alamat / No. KK': k.alamat||'', 'Status': k.status,
+    'Kelompok Ngayah': k.kelompok_no || '-',
+    'Denda Manual (Rp)': Number(k.denda_manual)||0,
+    'Denda Ketidakhadiran (Rp)': dendaOtomatis(k.id),
+    'Total Denda (Rp)': totalDendaKrama(k)
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(kramaRows.length?kramaRows:[{'No':'','Nama Krama':'(belum ada data)'}]), 'Data Krama & Denda');
+
+  const kelompokRows = kelompok.map(kel=>({
+    'Kelompok': kel.no,
+    'Anggota': kel.anggota.map(namaKrama).join(', ') || '-',
+    'Jumlah Anggota': kel.anggota.length
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(kelompokRows), 'Anggota Kelompok 1-8');
+
+  const tugasLogRows = tugasLog.map(t=>({
+    'Tanggal': t.tanggal, 'Kelompok': 'Kelompok '+t.kelompok_no,
+    'Jenis Tugas': t.jenis, 'Keterangan': t.keterangan || '-'
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tugasLogRows.length?tugasLogRows:[{'Tanggal':'','Kelompok':'(belum ada catatan)'}]), 'Riwayat Tugas Ngayah');
+
+  const grupRows = krama.map((k,i)=>({
+    'No': i+1, 'Nama Krama': k.nama, 'Status': k.status, 'Grup Pegebagan': grupab[k.id] || '-'
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(grupRows.length?grupRows:[{'No':'','Nama Krama':'(belum ada data)'}]), 'Pegebagan Grup A-B');
+
+  const absensiRows = [];
+  sesiPegebagan.forEach(s=>{
+    absensiPegebagan.filter(a=>a.sesi_id===s.id).forEach(a=>{
+      absensiRows.push({
+        'Tanggal': s.tanggal, 'Keterangan': s.keterangan || '-',
+        'Krama': namaKrama(a.krama_id), 'Kehadiran': a.hadir ? 'Hadir' : 'Tidak Hadir',
+        'Denda (Rp)': a.hadir ? 0 : DENDA_PER_ABSEN
+      });
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(absensiRows.length?absensiRows:[{'Tanggal':'','Keterangan':'(belum ada data)'}]), 'Absensi Pegebagan');
+
+  const pinjamanRows = pinjaman.map(p=>{
+    const siklus = siklusTumpek(p.tanggal);
+    const bunga = hitungBunga(p);
+    const sisa = hitungSisa(p);
+    return {
+      'Krama': namaKrama(p.krama_id), 'Pokok Pinjaman (Rp)': Number(p.jumlah)||0,
+      'Tanggal Pinjam': p.tanggal, 'Siklus Manis Tumpek Terlewati': siklus,
+      'Bunga 2%/Siklus (Rp)': bunga, 'Sudah Dibayar (Rp)': Number(p.dibayar)||0,
+      'Sisa Tagihan (Rp)': sisa, 'Status': p.status
+    };
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pinjamanRows.length?pinjamanRows:[{'Krama':'(belum ada data)'}]), 'Pinjaman Uang');
+
+  const tanggal = todayStr();
+  XLSX.writeFile(wb, `tempek-banjar-backup-${tanggal}.xlsx`);
+});
+
+/* ---------- KELOLA PENGGUNA (admin & kelian tempekan) ---------- */
+let daftarPengurus = [];
+async function loadPengurus(){
+  if(!currentUser || !(currentUser.role==='admin' || currentUser.role==='kelian')) return;
+  try{
+    const { data, error } = await sb.rpc('list_pengurus', { p_admin_username: currentUser.username, p_admin_password: currentUser.password });
+    if(error) throw error;
+    daftarPengurus = data || [];
+    renderPengurus();
+  }catch(err){
+    console.error(err);
+    document.getElementById('penggunaTableBody').innerHTML = `<tr><td colspan="4"><div class="empty"><div class="big">Gagal memuat</div>${err.message||err}</div></td></tr>`;
+  }
+}
+function renderPengurus(){
+  const tbody = document.getElementById('penggunaTableBody');
+  if(!tbody) return;
+  if(daftarPengurus.length===0){
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="big">Belum ada akun</div>Tambahkan akun pengurus melalui formulir di atas.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = daftarPengurus.map(p=>`
+    <tr>
+      <td>${p.username}</td>
+      <td>${p.nama||'—'}</td>
+      <td><span class="badge ${p.role==='kelian'?'groupA':'aktif'}">${labelRole(p.role)}</span></td>
+      <td style="white-space:nowrap;">
+        <button class="btn ghost sm" onclick="editPengurus('${p.username}')">Ubah</button>
+        <button class="btn danger sm" onclick="hapusPengurusUI('${p.username}')">Hapus</button>
+      </td>
+    </tr>`).join('');
+}
+window.editPengurus = function(username){
+  const p = daftarPengurus.find(x=>x.username===username); if(!p) return;
+  document.getElementById('penggunaUsername').value = p.username;
+  document.getElementById('penggunaUsername').disabled = true;
+  document.getElementById('penggunaNama').value = p.nama||'';
+  document.getElementById('penggunaRole').value = p.role;
+  document.getElementById('penggunaPassword').value = '';
+  document.getElementById('penggunaPassword').placeholder = 'Kosongkan kalau tidak ingin ganti password';
+  window.scrollTo({top:0,behavior:'smooth'});
+};
+document.getElementById('penggunaCancelBtn').addEventListener('click', resetPenggunaForm);
+function resetPenggunaForm(){
+  document.getElementById('penggunaUsername').value='';
+  document.getElementById('penggunaUsername').disabled = false;
+  document.getElementById('penggunaNama').value='';
+  document.getElementById('penggunaRole').value='pengurus';
+  document.getElementById('penggunaPassword').value='';
+  document.getElementById('penggunaPassword').placeholder = 'Kosongkan kalau tidak diubah (saat edit)';
+}
+document.getElementById('penggunaSaveBtn').addEventListener('click', async ()=>{
+  const username = document.getElementById('penggunaUsername').value.trim();
+  const nama = document.getElementById('penggunaNama').value.trim();
+  const role = document.getElementById('penggunaRole').value;
+  const password = document.getElementById('penggunaPassword').value;
+  if(!username){ alert('Username wajib diisi.'); return; }
+  try{
+    const { error } = await sb.rpc('simpan_pengurus', {
+      p_admin_username: currentUser.username, p_admin_password: currentUser.password,
+      p_target_username: username, p_target_password: password || null,
+      p_target_nama: nama || null, p_target_role: role
+    });
+    if(error) throw error;
+    resetPenggunaForm();
+    await loadPengurus();
+  }catch(err){
+    alert('Gagal menyimpan akun: ' + (err.message||err));
+  }
+});
+window.hapusPengurusUI = async function(username){
+  if(!confirm(`Hapus akun "${username}"? Aksi ini tidak bisa dibatalkan.`)) return;
+  try{
+    const { error } = await sb.rpc('hapus_pengurus', {
+      p_admin_username: currentUser.username, p_admin_password: currentUser.password,
+      p_target_username: username
+    });
+    if(error) throw error;
+    await loadPengurus();
+  }catch(err){
+    alert('Gagal menghapus akun: ' + (err.message||err));
+  }
+};
+
+/* ---------- LOGIN / LOGOUT ---------- */
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+document.getElementById('loginPassword').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('loginUsername').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+
+async function doLogin(){
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.style.display='none';
+  if(!username || !password){ errEl.textContent='Isi username dan password.'; errEl.style.display='block'; return; }
+  if(SUPABASE_URL.startsWith('ISI_') || SUPABASE_ANON_KEY.startsWith('ISI_')){
+    errEl.textContent='Konfigurasi Supabase belum diisi di app.js.'; errEl.style.display='block'; return;
+  }
+  const loginBtn = document.getElementById('loginBtn');
+  loginBtn.disabled = true; loginBtn.textContent = 'Memeriksa...';
+  try{
+    const { data, error } = await sb.rpc('login_pengurus', { p_username: username, p_password: password });
+    if(error) throw error;
+    const hasil = Array.isArray(data) ? data[0] : data;
+    if(!hasil || !hasil.ok){
+      errEl.textContent = 'Username atau password salah.'; errEl.style.display='block';
+      return;
+    }
+    currentUser = { username: hasil.username, password, role: hasil.role, nama: hasil.nama || hasil.username };
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('appRoot').style.display = '';
+    document.getElementById('loginPassword').value = '';
+    const badge = document.getElementById('userBadge');
+    badge.style.display = '';
+    badge.textContent = `${currentUser.nama} · ${labelRole(currentUser.role)}`;
+    document.getElementById('logoutBtn').style.display = '';
+    document.getElementById('navPengguna').style.display = (currentUser.role==='admin'||currentUser.role==='kelian') ? '' : 'none';
+    await loadAll();
+    await loadPengurus();
+  }catch(err){
+    console.error(err);
+    errEl.textContent = 'Gagal terhubung: ' + (err.message||err); errEl.style.display='block';
+  }finally{
+    loginBtn.disabled = false; loginBtn.textContent = 'Masuk';
+  }
+}
+function labelRole(r){
+  if(r==='admin') return 'Admin';
+  if(r==='kelian') return 'Kelian Tempekan';
+  return 'Pengurus';
+}
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  currentUser = null;
+  location.reload();
+});
+
