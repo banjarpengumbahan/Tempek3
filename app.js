@@ -241,8 +241,9 @@ function renderKrama(){
       <td>${k.alamat||'—'}</td>
       <td>${badgeStatus(k.status)}</td>
       <td style="white-space:nowrap;">
+        ${isViewOnly() ? '' : `
         <button class="btn ghost sm" onclick="editKrama('${k.id}')">Ubah</button>
-        <button class="btn danger sm" onclick="hapusKrama('${k.id}')">Hapus</button>
+        <button class="btn danger sm" onclick="hapusKrama('${k.id}')">Hapus</button>`}
       </td>
     </tr>`).join('');
 }
@@ -279,7 +280,9 @@ function renderDenda(){
       <td>${i+1}</td>
       <td>${namaTampil(k)}</td>
       <td>${badgeStatus(k.status)}</td>
-      <td><input type="number" min="0" value="${k.denda_manual||0}" onchange="updateDenda('${k.id}', this.value)"></td>
+      <td>${isViewOnly()
+        ? rupiah(k.denda_manual||0)
+        : `<input type="number" min="0" value="${k.denda_manual||0}" onchange="updateDenda('${k.id}', this.value)">`}</td>
       <td>${rupiah(otomatis)} <span style="color:var(--text-dim);font-size:11px;">(${jumlahTidakHadir(k.id)}x absen)</span></td>
       <td><strong>${rupiah(total)}</strong></td>
     </tr>`;
@@ -296,6 +299,22 @@ window.updateDenda = async function(id, val){
 /* ---------- TUGAS KELOMPOK NGAYAH 1-8 (eksklusif: 1 krama = 1 kelompok) ---------- */
 function renderKelompok(){
   const grid = document.getElementById('kelompokGrid');
+  if(isViewOnly()){
+    grid.innerHTML = kelompok.map(kel=>{
+      const anggota = kel.anggota.map(id=>{
+        const k = krama.find(x=>x.id===id);
+        return k ? namaTeks(k) : null;
+      }).filter(Boolean);
+      return `
+        <div class="kelompok-card">
+          <div class="kno"><span class="num">${kel.no}</span> Kelompok ${kel.no}</div>
+          ${anggota.length
+            ? `<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">${anggota.map(n=>`<li>${n}</li>`).join('')}</ul>`
+            : `<div style="font-size:12.5px;color:var(--text-dim);">Belum ada anggota.</div>`}
+        </div>`;
+    }).join('');
+    return;
+  }
   grid.innerHTML = kelompok.map((kel)=>{
     // hanya tampilkan krama yang belum masuk kelompok manapun, atau sudah masuk KELOMPOK INI
     const tersedia = krama.filter(k => !k.kelompok_no || k.kelompok_no === kel.no);
@@ -341,7 +360,7 @@ function renderTugasLog(){
       <td>Kelompok ${t.kelompok_no}</td>
       <td><span class="badge ${t.jenis==='Ngejuk Celeng'?'berjalan':'groupB'}">${t.jenis}</span></td>
       <td>${t.keterangan || '—'}</td>
-      <td><button class="btn danger sm" onclick="hapusTugasLog('${t.id}')">Hapus</button></td>
+      <td>${isViewOnly() ? '' : `<button class="btn danger sm" onclick="hapusTugasLog('${t.id}')">Hapus</button>`}</td>
     </tr>`).join('');
 }
 window.hapusTugasLog = async function(id){
@@ -367,10 +386,12 @@ function renderGrupAB(){
       <td>${namaTampil(k)}</td>
       <td>${badgeStatus(k.status)}</td>
       <td>
-        <div class="toggleAB">
+        ${isViewOnly()
+          ? (g ? `<span class="badge ${g==='A'?'groupA':'groupB'}">Grup ${g}</span>` : `<span style="color:var(--text-dim);font-size:12px;">Belum ditentukan</span>`)
+          : `<div class="toggleAB">
           <button class="sel-a ${g==='A'?'on':''}" onclick="setGrup('${k.id}','A')">A</button>
           <button class="sel-b ${g==='B'?'on':''}" onclick="setGrup('${k.id}','B')">B</button>
-        </div>
+        </div>`}
       </td>
     </tr>`;
   }).join('');
@@ -440,7 +461,7 @@ function renderAbsensiLog(){
         <td>${s.keterangan || '—'}</td>
         <td>${hadir}</td>
         <td>${tidakHadir > 0 ? `<strong>${tidakHadir}</strong> <span style="color:var(--text-dim);font-size:11px;">(${rupiah(tidakHadir*DENDA_PER_ABSEN)})</span>` : '0'}</td>
-        <td><button class="btn danger sm" onclick="hapusSesiAbsensi('${s.id}')">Hapus</button></td>
+        <td>${isViewOnly() ? '' : `<button class="btn danger sm" onclick="hapusSesiAbsensi('${s.id}')">Hapus</button>`}</td>
       </tr>`;
   }).join('');
 }
@@ -510,8 +531,9 @@ function renderPinjaman(){
         <td><strong>${rupiah(sisa)}</strong></td>
         <td>${p.status==='Lunas' ? '<span class="badge lunas">Lunas</span>' : '<span class="badge berjalan">Berjalan</span>'}</td>
         <td style="white-space:nowrap;">
+          ${isViewOnly() ? '' : `
           ${p.status!=='Lunas' ? `<button class="btn gold sm" onclick="bukaBayar('${p.id}')">Bayar</button>` : ''}
-          <button class="btn danger sm" onclick="hapusPinjaman('${p.id}')">Hapus</button>
+          <button class="btn danger sm" onclick="hapusPinjaman('${p.id}')">Hapus</button>`}
         </td>
       </tr>`;
   }).join('');
@@ -736,6 +758,7 @@ async function doLogin(){
     badge.textContent = `${currentUser.nama} · ${labelRole(currentUser.role)}`;
     document.getElementById('logoutBtn').style.display = '';
     document.getElementById('navPengguna').style.display = (currentUser.role==='admin'||currentUser.role==='kelian') ? '' : 'none';
+    document.body.classList.toggle('krama-mode', currentUser.role==='krama');
     await loadAll();
     await loadPengurus();
   }catch(err){
@@ -748,7 +771,11 @@ async function doLogin(){
 function labelRole(r){
   if(r==='admin') return 'Admin';
   if(r==='kelian') return 'Kelian Tempekan';
+  if(r==='krama') return 'Krama (Lihat Saja)';
   return 'Pengurus';
+}
+function isViewOnly(){
+  return !!(currentUser && currentUser.role === 'krama');
 }
 document.getElementById('logoutBtn').addEventListener('click', ()=>{
   currentUser = null;
