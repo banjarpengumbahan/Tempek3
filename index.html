@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tempek Banjar</title>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -101,7 +101,7 @@
     <section class="view" id="view-krama">
       <h2 class="section-title">Data Krama</h2>
       <p class="section-sub">Daftar seluruh krama tempek beserta status keanggotaannya.</p>
-      <div class="card" style="margin-bottom:18px;">
+      <div class="card only-edit" style="margin-bottom:18px;">
         <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Tambah / Ubah Krama</div>
         <input type="hidden" id="kramaEditId">
         <div class="form-row">
@@ -159,7 +159,7 @@
 
       <div class="kelompok-grid" id="kelompokGrid" style="margin-bottom:22px;"></div>
 
-      <div class="card" style="margin-bottom:18px;">
+      <div class="card only-edit" style="margin-bottom:18px;">
         <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Catat Tugas Ngayah</div>
         <p class="section-sub" style="margin-bottom:14px;">Diisi oleh Ketua Tempek setiap kali menugaskan kelompok untuk ngejuk atau ngedasin celeng.</p>
         <div class="form-row">
@@ -221,7 +221,7 @@
     <section class="view" id="view-absensi">
       <h2 class="section-title">Absensi Pegebagan</h2>
       <p class="section-sub">Pengurus mencatat kehadiran anggota Grup A/B setiap kegiatan pegebagan. Yang tidak hadir otomatis dikenai denda Rp 10.000.</p>
-      <div class="card" style="margin-bottom:18px;">
+      <div class="card only-edit" style="margin-bottom:18px;">
         <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Catat Absensi Baru</div>
         <div class="form-row">
           <div><label>Tanggal Kegiatan</label><input type="date" id="absensiTanggal"></div>
@@ -249,7 +249,7 @@
     <section class="view" id="view-pinjaman">
       <h2 class="section-title">Pinjaman Uang</h2>
       <p class="section-sub">Jatuh tempo pembayaran setiap siklus Manis Tumpek (35 hari), bunga 2% per siklus dari pokok pinjaman.</p>
-      <div class="card" style="margin-bottom:18px;">
+      <div class="card only-edit" style="margin-bottom:18px;">
         <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Catat Pinjaman Baru</div>
         <div class="form-row">
           <div><label>Krama Peminjam</label><select id="pinjamKrama"></select></div>
@@ -286,6 +286,7 @@
             <select id="penggunaRole">
               <option value="pengurus">Pengurus</option>
               <option value="kelian">Kelian Tempekan</option>
+              <option value="krama">Krama (Lihat Saja)</option>
             </select>
           </div>
         </div>
@@ -323,6 +324,6 @@
   </div>
 </div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
