@@ -15,6 +15,7 @@ let pinjaman = [];
 let sesiPegebagan = [];
 let absensiPegebagan = [];
 let payingLoanId = null;
+let currentUser = null; // {username, password, role, nama} — disimpan di memori saja, hilang saat reload/logout
 
 const DENDA_PER_ABSEN = 10000;
 
@@ -618,4 +619,139 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   XLSX.writeFile(wb, `tempek-banjar-backup-${tanggal}.xlsx`);
 });
 
-loadAll();
+/* ---------- KELOLA PENGGUNA (admin & kelian tempekan) ---------- */
+let daftarPengurus = [];
+async function loadPengurus(){
+  if(!currentUser || !(currentUser.role==='admin' || currentUser.role==='kelian')) return;
+  try{
+    const { data, error } = await sb.rpc('list_pengurus', { p_admin_username: currentUser.username, p_admin_password: currentUser.password });
+    if(error) throw error;
+    daftarPengurus = data || [];
+    renderPengurus();
+  }catch(err){
+    console.error(err);
+    document.getElementById('penggunaTableBody').innerHTML = `<tr><td colspan="4"><div class="empty"><div class="big">Gagal memuat</div>${err.message||err}</div></td></tr>`;
+  }
+}
+function renderPengurus(){
+  const tbody = document.getElementById('penggunaTableBody');
+  if(!tbody) return;
+  if(daftarPengurus.length===0){
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="big">Belum ada akun</div>Tambahkan akun pengurus melalui formulir di atas.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = daftarPengurus.map(p=>`
+    <tr>
+      <td>${p.username}</td>
+      <td>${p.nama||'—'}</td>
+      <td><span class="badge ${p.role==='kelian'?'groupA':'aktif'}">${labelRole(p.role)}</span></td>
+      <td style="white-space:nowrap;">
+        <button class="btn ghost sm" onclick="editPengurus('${p.username}')">Ubah</button>
+        <button class="btn danger sm" onclick="hapusPengurusUI('${p.username}')">Hapus</button>
+      </td>
+    </tr>`).join('');
+}
+window.editPengurus = function(username){
+  const p = daftarPengurus.find(x=>x.username===username); if(!p) return;
+  document.getElementById('penggunaUsername').value = p.username;
+  document.getElementById('penggunaUsername').disabled = true;
+  document.getElementById('penggunaNama').value = p.nama||'';
+  document.getElementById('penggunaRole').value = p.role;
+  document.getElementById('penggunaPassword').value = '';
+  document.getElementById('penggunaPassword').placeholder = 'Kosongkan kalau tidak ingin ganti password';
+  window.scrollTo({top:0,behavior:'smooth'});
+};
+document.getElementById('penggunaCancelBtn').addEventListener('click', resetPenggunaForm);
+function resetPenggunaForm(){
+  document.getElementById('penggunaUsername').value='';
+  document.getElementById('penggunaUsername').disabled = false;
+  document.getElementById('penggunaNama').value='';
+  document.getElementById('penggunaRole').value='pengurus';
+  document.getElementById('penggunaPassword').value='';
+  document.getElementById('penggunaPassword').placeholder = 'Kosongkan kalau tidak diubah (saat edit)';
+}
+document.getElementById('penggunaSaveBtn').addEventListener('click', async ()=>{
+  const username = document.getElementById('penggunaUsername').value.trim();
+  const nama = document.getElementById('penggunaNama').value.trim();
+  const role = document.getElementById('penggunaRole').value;
+  const password = document.getElementById('penggunaPassword').value;
+  if(!username){ alert('Username wajib diisi.'); return; }
+  try{
+    const { error } = await sb.rpc('simpan_pengurus', {
+      p_admin_username: currentUser.username, p_admin_password: currentUser.password,
+      p_target_username: username, p_target_password: password || null,
+      p_target_nama: nama || null, p_target_role: role
+    });
+    if(error) throw error;
+    resetPenggunaForm();
+    await loadPengurus();
+  }catch(err){
+    alert('Gagal menyimpan akun: ' + (err.message||err));
+  }
+});
+window.hapusPengurusUI = async function(username){
+  if(!confirm(`Hapus akun "${username}"? Aksi ini tidak bisa dibatalkan.`)) return;
+  try{
+    const { error } = await sb.rpc('hapus_pengurus', {
+      p_admin_username: currentUser.username, p_admin_password: currentUser.password,
+      p_target_username: username
+    });
+    if(error) throw error;
+    await loadPengurus();
+  }catch(err){
+    alert('Gagal menghapus akun: ' + (err.message||err));
+  }
+};
+
+/* ---------- LOGIN / LOGOUT ---------- */
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+document.getElementById('loginPassword').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('loginUsername').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+
+async function doLogin(){
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.style.display='none';
+  if(!username || !password){ errEl.textContent='Isi username dan password.'; errEl.style.display='block'; return; }
+  if(SUPABASE_URL.startsWith('ISI_') || SUPABASE_ANON_KEY.startsWith('ISI_')){
+    errEl.textContent='Konfigurasi Supabase belum diisi di app.js.'; errEl.style.display='block'; return;
+  }
+  const loginBtn = document.getElementById('loginBtn');
+  loginBtn.disabled = true; loginBtn.textContent = 'Memeriksa...';
+  try{
+    const { data, error } = await sb.rpc('login_pengurus', { p_username: username, p_password: password });
+    if(error) throw error;
+    const hasil = Array.isArray(data) ? data[0] : data;
+    if(!hasil || !hasil.ok){
+      errEl.textContent = 'Username atau password salah.'; errEl.style.display='block';
+      return;
+    }
+    currentUser = { username: hasil.username, password, role: hasil.role, nama: hasil.nama || hasil.username };
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('appRoot').style.display = '';
+    document.getElementById('loginPassword').value = '';
+    const badge = document.getElementById('userBadge');
+    badge.style.display = '';
+    badge.textContent = `${currentUser.nama} · ${labelRole(currentUser.role)}`;
+    document.getElementById('logoutBtn').style.display = '';
+    document.getElementById('navPengguna').style.display = (currentUser.role==='admin'||currentUser.role==='kelian') ? '' : 'none';
+    await loadAll();
+    await loadPengurus();
+  }catch(err){
+    console.error(err);
+    errEl.textContent = 'Gagal terhubung: ' + (err.message||err); errEl.style.display='block';
+  }finally{
+    loginBtn.disabled = false; loginBtn.textContent = 'Masuk';
+  }
+}
+function labelRole(r){
+  if(r==='admin') return 'Admin';
+  if(r==='kelian') return 'Kelian Tempekan';
+  return 'Pengurus';
+}
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  currentUser = null;
+  location.reload();
+});
+
