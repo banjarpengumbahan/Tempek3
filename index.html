@@ -4,12 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tempek Banjar</title>
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
-<div class="app">
+
+<!-- LOGIN OVERLAY -->
+<div class="modal-bg" id="loginOverlay">
+  <div class="modal" style="max-width:360px;">
+    <h3>Masuk — Tempek Banjar</h3>
+    <p style="font-size:12.5px;color:var(--text-dim);margin:-6px 0 16px;">Hubungi admin atau kelian tempekan kalau belum punya akun.</p>
+    <label>Username</label>
+    <input id="loginUsername" placeholder="username" autocomplete="username">
+    <div style="height:10px;"></div>
+    <label>Password</label>
+    <input id="loginPassword" type="password" placeholder="password" autocomplete="current-password">
+    <div id="loginError" style="color:var(--clay);font-size:12.5px;margin-top:10px;display:none;"></div>
+    <div class="form-actions">
+      <button class="btn gold" id="loginBtn" style="width:100%;">Masuk</button>
+    </div>
+  </div>
+</div>
+
+<div class="app" id="appRoot" style="display:none;">
   <header class="top">
     <div class="top-inner">
       <div class="brand">
@@ -21,7 +39,9 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <span class="tempek-name" id="tempekLabel">memuat…</span>
+        <span class="tempek-name" id="userBadge" style="display:none;"></span>
         <button class="btn ghost sm" id="exportBtn" style="background:transparent;border:1px solid var(--gold);color:var(--gold);">⭳ Ekspor Data (Excel)</button>
+        <button class="btn ghost sm" id="logoutBtn" style="display:none;background:transparent;border:1px solid var(--clay);color:var(--clay);">Keluar</button>
       </div>
     </div>
   </header>
@@ -35,6 +55,7 @@
     <button data-view="grupab">Pegebagan Grup A/B</button>
     <button data-view="absensi">Absensi Pegebagan</button>
     <button data-view="pinjaman">Pinjaman Uang</button>
+    <button data-view="pengguna" id="navPengguna" style="display:none;">Kelola Pengguna</button>
   </nav>
 
   <main>
@@ -252,6 +273,40 @@
       </div>
     </section>
 
+    <!-- KELOLA PENGGUNA -->
+    <section class="view" id="view-pengguna">
+      <h2 class="section-title">Kelola Pengguna</h2>
+      <p class="section-sub">Hanya admin dan kelian tempekan yang bisa membuat akun baru dan mengubah password.</p>
+      <div class="card" style="margin-bottom:18px;">
+        <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Tambah / Ubah Akun Pengurus</div>
+        <div class="form-row">
+          <div><label>Username</label><input id="penggunaUsername" placeholder="mis. bendahara1"></div>
+          <div><label>Nama</label><input id="penggunaNama" placeholder="Nama pengurus"></div>
+          <div><label>Role</label>
+            <select id="penggunaRole">
+              <option value="pengurus">Pengurus</option>
+              <option value="kelian">Kelian Tempekan</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div><label>Password</label><input id="penggunaPassword" type="password" placeholder="Kosongkan kalau tidak diubah (saat edit)"></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn ghost" id="penggunaCancelBtn">Batal</button>
+          <button class="btn gold" id="penggunaSaveBtn">Simpan Akun</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Username</th><th>Nama</th><th>Role</th><th></th></tr></thead>
+            <tbody id="penggunaTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
   </main>
   <footer class="foot">Data tersimpan di Supabase — dapat dilihat &amp; diubah oleh siapa pun yang membuka aplikasi ini.</footer>
 </div>
@@ -268,6 +323,6 @@
   </div>
 </div>
 
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
