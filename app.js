@@ -210,7 +210,7 @@ document.getElementById('kramaSaveBtn').addEventListener('click', async ()=>{
   if(id){
     ({error} = await sb.from('krama').update({nama, alias, alamat, status}).eq('id', id));
   } else {
-    ({error} = await sb.from('krama').insert({nama, alias, alamat, status, denda:0}));
+    ({error} = await sb.from('krama').insert({nama, alias, alamat, status, denda_manual:0}));
   }
   if(error){ alert('Gagal menyimpan: '+error.message); return; }
   resetKramaForm();
