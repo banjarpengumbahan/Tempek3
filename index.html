@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tempek Banjar</title>
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=9">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -131,6 +131,13 @@
             <tbody id="kramaTableBody"></tbody>
           </table>
         </div>
+        <div class="toolbar" style="margin-top:14px;margin-bottom:0;">
+          <span id="kramaPageInfo" style="font-size:12.5px;color:var(--text-dim);"></span>
+          <div class="right">
+            <button class="btn ghost sm" id="kramaPrevBtn">◀ Sebelumnya</button>
+            <button class="btn ghost sm" id="kramaNextBtn">Selanjutnya ▶</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -145,6 +152,13 @@
             <thead><tr><th>No</th><th>Nama Krama</th><th>Status</th><th style="width:160px;">Denda Manual (Rp)</th><th style="width:150px;">Denda Ketidakhadiran</th><th style="width:140px;">Total Denda</th></tr></thead>
             <tbody id="dendaTableBody"></tbody>
           </table>
+        </div>
+        <div class="toolbar" style="margin-top:14px;margin-bottom:0;">
+          <span id="dendaPageInfo" style="font-size:12.5px;color:var(--text-dim);"></span>
+          <div class="right">
+            <button class="btn ghost sm" id="dendaPrevBtn">◀ Sebelumnya</button>
+            <button class="btn ghost sm" id="dendaNextBtn">Selanjutnya ▶</button>
+          </div>
         </div>
         <div style="text-align:right;margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:14px;">
           Total Denda Terkumpul: <strong id="totalDenda">Rp 0</strong>
@@ -199,6 +213,13 @@
             <tbody id="tugasLogBody"></tbody>
           </table>
         </div>
+        <div class="toolbar" style="margin-top:14px;margin-bottom:0;">
+          <span id="tugasLogPageInfo" style="font-size:12.5px;color:var(--text-dim);"></span>
+          <div class="right">
+            <button class="btn ghost sm" id="tugasLogPrevBtn">◀ Sebelumnya</button>
+            <button class="btn ghost sm" id="tugasLogNextBtn">Selanjutnya ▶</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -212,6 +233,13 @@
             <thead><tr><th>No</th><th>Nama Krama</th><th>Status</th><th style="width:150px;">Grup</th></tr></thead>
             <tbody id="grupabTableBody"></tbody>
           </table>
+        </div>
+        <div class="toolbar" style="margin-top:14px;margin-bottom:0;">
+          <span id="grupabPageInfo" style="font-size:12.5px;color:var(--text-dim);"></span>
+          <div class="right">
+            <button class="btn ghost sm" id="grupabPrevBtn">◀ Sebelumnya</button>
+            <button class="btn ghost sm" id="grupabNextBtn">Selanjutnya ▶</button>
+          </div>
         </div>
         <div style="margin-top:14px;font-size:13px;color:var(--text-dim);" id="grupabSummary"></div>
       </div>
@@ -242,6 +270,13 @@
             <tbody id="absensiLogBody"></tbody>
           </table>
         </div>
+        <div class="toolbar" style="margin-top:14px;margin-bottom:0;">
+          <span id="absensiLogPageInfo" style="font-size:12.5px;color:var(--text-dim);"></span>
+          <div class="right">
+            <button class="btn ghost sm" id="absensiLogPrevBtn">◀ Sebelumnya</button>
+            <button class="btn ghost sm" id="absensiLogNextBtn">Selanjutnya ▶</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -252,7 +287,13 @@
       <div class="card only-edit" style="margin-bottom:18px;">
         <div style="font-family:'Fraunces',serif;font-weight:600;margin-bottom:12px;">Catat Pinjaman Baru</div>
         <div class="form-row">
-          <div><label>Krama Peminjam</label><select id="pinjamKrama"></select></div>
+          <div><label>Krama Peminjam</label>
+            <div style="position:relative;">
+              <input id="pinjamKramaSearch" placeholder="Ketik nama krama..." autocomplete="off">
+              <input type="hidden" id="pinjamKramaId">
+              <div class="combo-dropdown hidden" id="pinjamKramaDropdown"></div>
+            </div>
+          </div>
           <div><label>Jumlah Pinjaman (Rp)</label><input type="number" min="0" id="pinjamJumlah" placeholder="0"></div>
           <div><label>Tanggal Pinjam</label><input type="date" id="pinjamTanggal"></div>
         </div>
@@ -269,6 +310,13 @@
             </tr></thead>
             <tbody id="pinjamanTableBody"></tbody>
           </table>
+        </div>
+        <div class="toolbar" style="margin-top:14px;margin-bottom:0;">
+          <span id="pinjamanPageInfo" style="font-size:12.5px;color:var(--text-dim);"></span>
+          <div class="right">
+            <button class="btn ghost sm" id="pinjamanPrevBtn">◀ Sebelumnya</button>
+            <button class="btn ghost sm" id="pinjamanNextBtn">Selanjutnya ▶</button>
+          </div>
         </div>
       </div>
     </section>
@@ -305,6 +353,13 @@
             <tbody id="penggunaTableBody"></tbody>
           </table>
         </div>
+        <div class="toolbar" style="margin-top:14px;margin-bottom:0;">
+          <span id="penggunaPageInfo" style="font-size:12.5px;color:var(--text-dim);"></span>
+          <div class="right">
+            <button class="btn ghost sm" id="penggunaPrevBtn">◀ Sebelumnya</button>
+            <button class="btn ghost sm" id="penggunaNextBtn">Selanjutnya ▶</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -324,6 +379,6 @@
   </div>
 </div>
 
-<script src="app.js?v=6"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
