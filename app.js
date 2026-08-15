@@ -31,6 +31,31 @@ function totalDendaKrama(k){
   return (Number(k.denda_manual)||0) + dendaOtomatis(k.id);
 }
 
+/* ---------- PAGINASI GENERIK (15 baris/halaman) ---------- */
+const PAGE_SIZE = 15;
+const pageState = { krama:1, denda:1, grupab:1, tugasLog:1, absensiLog:1, pinjaman:1, pengguna:1 };
+function paginate(prefix, fullArray){
+  const total = fullArray.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if(pageState[prefix] > totalPages) pageState[prefix] = totalPages;
+  if(pageState[prefix] < 1) pageState[prefix] = 1;
+  const start = (pageState[prefix]-1) * PAGE_SIZE;
+  const items = fullArray.slice(start, start + PAGE_SIZE);
+  const infoEl = document.getElementById(prefix+'PageInfo');
+  const prevBtn = document.getElementById(prefix+'PrevBtn');
+  const nextBtn = document.getElementById(prefix+'NextBtn');
+  if(infoEl) infoEl.textContent = total===0 ? '' : `Menampilkan ${start+1}–${start+items.length} dari ${total} · Halaman ${pageState[prefix]}/${totalPages}`;
+  if(prevBtn) prevBtn.disabled = pageState[prefix] <= 1;
+  if(nextBtn) nextBtn.disabled = pageState[prefix] >= totalPages;
+  return {items, start};
+}
+function wirePager(prefix, renderFn){
+  const prevBtn = document.getElementById(prefix+'PrevBtn');
+  const nextBtn = document.getElementById(prefix+'NextBtn');
+  if(prevBtn) prevBtn.addEventListener('click', ()=>{ pageState[prefix]--; renderFn(); });
+  if(nextBtn) nextBtn.addEventListener('click', ()=>{ pageState[prefix]++; renderFn(); });
+}
+
 function showConnError(msg){
   const el = document.getElementById('connError');
   el.textContent = '⚠ ' + msg;
@@ -224,19 +249,22 @@ function resetKramaForm(){
   document.getElementById('kramaAlamat').value='';
   document.getElementById('kramaStatus').value='Aktif';
 }
-document.getElementById('kramaSearch').addEventListener('input', renderKrama);
+document.getElementById('kramaSearch').addEventListener('input', ()=>{ pageState.krama = 1; renderKrama(); });
 
 function renderKrama(){
   const q = (document.getElementById('kramaSearch').value||'').toLowerCase();
   const tbody = document.getElementById('kramaTableBody');
-  const list = krama.filter(k=>k.nama.toLowerCase().includes(q));
-  if(list.length===0){
+  const listFull = krama.filter(k=>k.nama.toLowerCase().includes(q));
+  if(listFull.length===0){
     tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama pertama melalui formulir di atas.</div></td></tr>`;
+    paginate('krama', []);
     return;
   }
+  const {items:list, start} = paginate('krama', listFull);
+
   tbody.innerHTML = list.map((k,i)=>`
     <tr>
-      <td>${i+1}</td>
+      <td>${start+i+1}</td>
       <td>${namaTampil(k)}</td>
       <td>${k.alamat||'—'}</td>
       <td>${badgeStatus(k.status)}</td>
@@ -247,6 +275,7 @@ function renderKrama(){
       </td>
     </tr>`).join('');
 }
+wirePager('krama', renderKrama);
 window.editKrama = function(id){
   const k = krama.find(x=>x.id===id); if(!k) return;
   document.getElementById('kramaEditId').value = k.id;
@@ -270,14 +299,16 @@ function renderDenda(){
   if(krama.length===0){
     tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama terlebih dahulu di tab Data Krama.</div></td></tr>`;
     document.getElementById('totalDenda').textContent = rupiah(0);
+    paginate('denda', []);
     return;
   }
-  tbody.innerHTML = krama.map((k,i)=>{
+  const {items:list, start} = paginate('denda', krama);
+  tbody.innerHTML = list.map((k,i)=>{
     const otomatis = dendaOtomatis(k.id);
     const total = totalDendaKrama(k);
     return `
     <tr>
-      <td>${i+1}</td>
+      <td>${start+i+1}</td>
       <td>${namaTampil(k)}</td>
       <td>${badgeStatus(k.status)}</td>
       <td>${isViewOnly()
@@ -290,6 +321,7 @@ function renderDenda(){
   const total = krama.reduce((s,k)=>s+totalDendaKrama(k),0);
   document.getElementById('totalDenda').textContent = rupiah(total);
 }
+wirePager('denda', renderDenda);
 window.updateDenda = async function(id, val){
   const {error} = await sb.from('krama').update({denda_manual: Number(val)||0}).eq('id', id);
   if(error){ alert('Gagal menyimpan denda: '+error.message); return; }
@@ -352,9 +384,11 @@ function renderTugasLog(){
   const tbody = document.getElementById('tugasLogBody');
   if(tugasLog.length===0){
     tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="big">Belum ada catatan tugas</div>Catat penugasan pertama melalui formulir di atas.</div></td></tr>`;
+    paginate('tugasLog', []);
     return;
   }
-  tbody.innerHTML = tugasLog.map(t=>`
+  const {items:list} = paginate('tugasLog', tugasLog);
+  tbody.innerHTML = list.map(t=>`
     <tr>
       <td>${t.tanggal}</td>
       <td>Kelompok ${t.kelompok_no}</td>
@@ -363,6 +397,7 @@ function renderTugasLog(){
       <td>${isViewOnly() ? '' : `<button class="btn danger sm" onclick="hapusTugasLog('${t.id}')">Hapus</button>`}</td>
     </tr>`).join('');
 }
+wirePager('tugasLog', renderTugasLog);
 window.hapusTugasLog = async function(id){
   if(!confirm('Hapus catatan tugas ini?')) return;
   const {error} = await sb.from('tugas_log').delete().eq('id', id);
@@ -376,13 +411,15 @@ function renderGrupAB(){
   if(krama.length===0){
     tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama terlebih dahulu di tab Data Krama.</div></td></tr>`;
     document.getElementById('grupabSummary').textContent='';
+    paginate('grupab', []);
     return;
   }
-  tbody.innerHTML = krama.map((k,i)=>{
+  const {items:list, start} = paginate('grupab', krama);
+  tbody.innerHTML = list.map((k,i)=>{
     const g = grupab[k.id] || '';
     return `
     <tr>
-      <td>${i+1}</td>
+      <td>${start+i+1}</td>
       <td>${namaTampil(k)}</td>
       <td>${badgeStatus(k.status)}</td>
       <td>
@@ -399,6 +436,7 @@ function renderGrupAB(){
   const b = Object.values(grupab).filter(g=>g==='B').length;
   document.getElementById('grupabSummary').innerHTML = `Grup A: <strong>${a}</strong> orang &nbsp;•&nbsp; Grup B: <strong>${b}</strong> orang`;
 }
+wirePager('grupab', renderGrupAB);
 window.setGrup = async function(kramaId, grup){
   let error;
   if(grupab[kramaId]===grup){
@@ -449,9 +487,11 @@ function renderAbsensiLog(){
   const tbody = document.getElementById('absensiLogBody');
   if(sesiPegebagan.length===0){
     tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="big">Belum ada absensi tercatat</div>Catat sesi pegebagan pertama melalui formulir di atas.</div></td></tr>`;
+    paginate('absensiLog', []);
     return;
   }
-  tbody.innerHTML = sesiPegebagan.map(s=>{
+  const {items:list} = paginate('absensiLog', sesiPegebagan);
+  tbody.innerHTML = list.map(s=>{
     const rows = absensiPegebagan.filter(a=>a.sesi_id===s.id);
     const hadir = rows.filter(a=>a.hadir).length;
     const tidakHadir = rows.filter(a=>!a.hadir).length;
@@ -465,6 +505,7 @@ function renderAbsensiLog(){
       </tr>`;
   }).join('');
 }
+wirePager('absensiLog', renderAbsensiLog);
 window.hapusSesiAbsensi = async function(id){
   if(!confirm('Hapus sesi absensi ini? Denda otomatis yang terkait juga akan hilang.')) return;
   const {error} = await sb.from('pegebagan_sesi').delete().eq('id', id);
@@ -474,19 +515,57 @@ window.hapusSesiAbsensi = async function(id){
 
 /* ---------- PINJAMAN ---------- */
 function renderPinjamanSelect(){
-  const sel = document.getElementById('pinjamKrama');
-  sel.innerHTML = krama.map(k=>`<option value="${k.id}">${namaTeks(k)}</option>`).join('') || `<option value="">Belum ada krama</option>`;
   if(!document.getElementById('pinjamTanggal').value) document.getElementById('pinjamTanggal').value = todayStr();
+  // kalau krama yang lagi dipilih ternyata sudah tidak ada lagi di data, reset pilihan
+  const idNow = document.getElementById('pinjamKramaId').value;
+  if(idNow && !krama.find(k=>k.id===idNow)){
+    document.getElementById('pinjamKramaId').value = '';
+    document.getElementById('pinjamKramaSearch').value = '';
+  }
 }
+function renderPinjamKramaDropdown(filterText){
+  const dropdown = document.getElementById('pinjamKramaDropdown');
+  const q = (filterText||'').trim().toLowerCase();
+  const hasil = krama.filter(k => namaTeks(k).toLowerCase().includes(q));
+  if(hasil.length===0){
+    dropdown.innerHTML = `<div class="combo-empty">Tidak ada krama yang cocok.</div>`;
+  } else {
+    dropdown.innerHTML = hasil.slice(0,50).map(k=>
+      `<div class="combo-item" data-id="${k.id}">${namaTeks(k)}</div>`
+    ).join('');
+  }
+  dropdown.classList.remove('hidden');
+}
+document.getElementById('pinjamKramaSearch').addEventListener('input', (e)=>{
+  document.getElementById('pinjamKramaId').value = '';
+  renderPinjamKramaDropdown(e.target.value);
+});
+document.getElementById('pinjamKramaSearch').addEventListener('focus', (e)=>{
+  renderPinjamKramaDropdown(e.target.value);
+});
+document.getElementById('pinjamKramaSearch').addEventListener('blur', ()=>{
+  setTimeout(()=>{ document.getElementById('pinjamKramaDropdown').classList.add('hidden'); }, 150);
+});
+document.getElementById('pinjamKramaDropdown').addEventListener('mousedown', (e)=>{
+  const item = e.target.closest('.combo-item');
+  if(!item) return;
+  e.preventDefault();
+  const k = krama.find(x=>x.id===item.dataset.id);
+  document.getElementById('pinjamKramaId').value = item.dataset.id;
+  document.getElementById('pinjamKramaSearch').value = k ? namaTeks(k) : '';
+  document.getElementById('pinjamKramaDropdown').classList.add('hidden');
+});
 document.getElementById('pinjamSaveBtn').addEventListener('click', async ()=>{
-  const kramaId = document.getElementById('pinjamKrama').value;
+  const kramaId = document.getElementById('pinjamKramaId').value;
   const jumlah = Number(document.getElementById('pinjamJumlah').value);
   const tanggal = document.getElementById('pinjamTanggal').value || todayStr();
-  if(!kramaId){ alert('Tambahkan krama terlebih dahulu.'); return; }
+  if(!kramaId){ alert('Ketik nama krama lalu pilih salah satu dari daftar yang muncul.'); return; }
   if(!jumlah || jumlah<=0){ alert('Jumlah pinjaman harus lebih dari 0.'); return; }
   const {error} = await sb.from('pinjaman').insert({krama_id:kramaId, jumlah, tanggal, dibayar:0, status:'Berjalan'});
   if(error){ alert('Gagal menyimpan: '+error.message); return; }
   document.getElementById('pinjamJumlah').value='';
+  document.getElementById('pinjamKramaId').value='';
+  document.getElementById('pinjamKramaSearch').value='';
   await loadAll();
 });
 
@@ -511,15 +590,21 @@ function renderPinjaman(){
   const tbody = document.getElementById('pinjamanTableBody');
   if(pinjaman.length===0){
     tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="big">Belum ada pinjaman</div>Catat pinjaman baru melalui formulir di atas.</div></td></tr>`;
+    paginate('pinjaman', []);
     return;
   }
+  // cek status lunas untuk SEMUA pinjaman (bukan cuma yang tampil di halaman ini)
   let needsLunasUpdate = [];
-  const rows = pinjaman.map(p=>{
+  pinjaman.forEach(p=>{
+    if(hitungSisa(p)<=0 && p.status!=='Lunas') needsLunasUpdate.push(p.id);
+  });
+
+  const {items:list} = paginate('pinjaman', pinjaman);
+  const rows = list.map(p=>{
     const k = krama.find(x=>x.id===p.krama_id);
     const siklus = siklusTumpek(p.tanggal);
     const bunga = hitungBunga(p);
     const sisa = hitungSisa(p);
-    if(sisa<=0 && p.status!=='Lunas') needsLunasUpdate.push(p.id);
     return `
       <tr>
         <td>${k? namaTampil(k) : '(krama dihapus)'}</td>
@@ -547,6 +632,7 @@ function renderPinjaman(){
     })();
   }
 }
+wirePager('pinjaman', renderPinjaman);
 window.hapusPinjaman = async function(id){
   if(!confirm('Hapus catatan pinjaman ini?')) return;
   const {error} = await sb.from('pinjaman').delete().eq('id', id);
@@ -660,9 +746,11 @@ function renderPengurus(){
   if(!tbody) return;
   if(daftarPengurus.length===0){
     tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="big">Belum ada akun</div>Tambahkan akun pengurus melalui formulir di atas.</div></td></tr>`;
+    paginate('pengguna', []);
     return;
   }
-  tbody.innerHTML = daftarPengurus.map(p=>`
+  const {items:list} = paginate('pengguna', daftarPengurus);
+  tbody.innerHTML = list.map(p=>`
     <tr>
       <td>${p.username}</td>
       <td>${p.nama||'—'}</td>
@@ -673,6 +761,7 @@ function renderPengurus(){
       </td>
     </tr>`).join('');
 }
+wirePager('pengguna', renderPengurus);
 window.editPengurus = function(username){
   const p = daftarPengurus.find(x=>x.username===username); if(!p) return;
   document.getElementById('penggunaUsername').value = p.username;
