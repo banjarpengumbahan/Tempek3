@@ -72,6 +72,7 @@ button.btn.ghost:hover{background:var(--paper-alt);}
 button.btn.danger{background:var(--clay-soft);color:var(--clay);}
 button.btn.danger:hover{background:var(--clay);color:#fff;}
 button.btn.sm{padding:5px 10px;font-size:12px;}
+button.btn:disabled{opacity:.4;cursor:not-allowed;}
 
 .form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px;}
 .form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;}
@@ -112,6 +113,10 @@ button.btn.sm{padding:5px 10px;font-size:12px;}
 .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
 .note{font-size:12px;color:var(--text-dim);background:var(--paper-alt);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:18px;}
 .hidden{display:none !important;}
+.combo-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:40;background:var(--card);border:1px solid var(--line);border-radius:8px;max-height:220px;overflow-y:auto;box-shadow:0 8px 20px rgba(30,27,22,.18);}
+.combo-item{padding:8px 12px;font-size:13.5px;cursor:pointer;}
+.combo-item:hover{background:var(--paper-alt);}
+.combo-empty{padding:10px 12px;font-size:12.5px;color:var(--text-dim);}
 .krama-mode .only-edit{display:none !important;}
 .modal-bg{position:fixed;inset:0;background:rgba(30,27,22,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;}
 .modal{background:var(--card);border-radius:var(--radius);padding:22px;max-width:420px;width:100%;}
