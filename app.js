@@ -294,15 +294,20 @@ window.hapusKrama = async function(id){
 };
 
 /* ---------- DENDA PEGEBAGAN ---------- */
+document.getElementById('dendaGrupFilter').addEventListener('change', ()=>{ pageState.denda = 1; renderDenda(); });
+
 function renderDenda(){
   const tbody = document.getElementById('dendaTableBody');
-  if(krama.length===0){
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama terlebih dahulu di tab Data Krama.</div></td></tr>`;
+  const filterGrup = document.getElementById('dendaGrupFilter').value;
+  const listSumber = filterGrup === 'semua' ? krama : krama.filter(k => grupab[k.id] === filterGrup);
+
+  if(listSumber.length===0){
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="big">${krama.length===0 ? 'Belum ada krama' : 'Tidak ada krama di grup ini'}</div>${krama.length===0 ? 'Tambahkan krama terlebih dahulu di tab Data Krama.' : 'Atur pembagian grup dulu di tab Pegebagan Grup A/B.'}</div></td></tr>`;
     document.getElementById('totalDenda').textContent = rupiah(0);
     paginate('denda', []);
     return;
   }
-  const {items:list, start} = paginate('denda', krama);
+  const {items:list, start} = paginate('denda', listSumber);
   tbody.innerHTML = list.map((k,i)=>{
     const otomatis = dendaOtomatis(k.id);
     const total = totalDendaKrama(k);
@@ -318,8 +323,9 @@ function renderDenda(){
       <td><strong>${rupiah(total)}</strong></td>
     </tr>`;
   }).join('');
-  const total = krama.reduce((s,k)=>s+totalDendaKrama(k),0);
-  document.getElementById('totalDenda').textContent = rupiah(total);
+  const total = listSumber.reduce((s,k)=>s+totalDendaKrama(k),0);
+  const labelTotal = filterGrup === 'semua' ? 'Total Denda Terkumpul' : `Total Denda Grup ${filterGrup}`;
+  document.getElementById('dendaTotalWrap').innerHTML = `${labelTotal}: <strong id="totalDenda">${rupiah(total)}</strong>`;
 }
 wirePager('denda', renderDenda);
 window.updateDenda = async function(id, val){
@@ -452,9 +458,13 @@ window.setGrup = async function(kramaId, grup){
 function renderAbsensiForm(){
   if(!document.getElementById('absensiTanggal').value) document.getElementById('absensiTanggal').value = todayStr();
   const wrap = document.getElementById('absensiChecklist');
-  const anggotaGrup = krama.filter(k => grupab[k.id] === 'A' || grupab[k.id] === 'B');
+  const filterGrup = document.getElementById('absensiGrupFilter').value;
+  const anggotaGrup = krama.filter(k => {
+    if(filterGrup === 'semua') return grupab[k.id] === 'A' || grupab[k.id] === 'B';
+    return grupab[k.id] === filterGrup;
+  });
   if(anggotaGrup.length===0){
-    wrap.innerHTML = `<div style="font-size:12.5px;color:var(--text-dim);padding:6px;">Belum ada krama yang masuk Grup A/B. Atur dulu di tab Pegebagan Grup A/B.</div>`;
+    wrap.innerHTML = `<div style="font-size:12.5px;color:var(--text-dim);padding:6px;">${filterGrup==='semua' ? 'Belum ada krama yang masuk Grup A/B. Atur dulu di tab Pegebagan Grup A/B.' : `Belum ada krama di Grup ${filterGrup}.`}</div>`;
     return;
   }
   wrap.innerHTML = anggotaGrup.map(k=>`
@@ -463,6 +473,7 @@ function renderAbsensiForm(){
       Tidak Hadir — ${namaTeks(k)} <span class="badge ${grupab[k.id]==='A'?'groupA':'groupB'}" style="margin-left:6px;">Grup ${grupab[k.id]}</span>
     </label>`).join('');
 }
+document.getElementById('absensiGrupFilter').addEventListener('change', renderAbsensiForm);
 document.getElementById('absensiSaveBtn').addEventListener('click', async ()=>{
   const tanggal = document.getElementById('absensiTanggal').value || todayStr();
   const keterangan = document.getElementById('absensiKeterangan').value.trim();
