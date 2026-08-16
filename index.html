@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tempek Banjar</title>
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -147,6 +147,13 @@
       <p class="section-sub">Denda manual diisi pengurus. Denda ketidakhadiran terisi otomatis dari absensi (Rp 10.000/absen).</p>
       <div class="note">Kolom "Denda Manual" dapat diketik langsung, lalu tekan Enter atau klik di luar kolom untuk menyimpan. Kolom "Denda Ketidakhadiran" terhitung otomatis, tidak bisa diubah langsung — ubah lewat tab Absensi Pegebagan.</div>
       <div class="card">
+        <div class="toolbar">
+          <select id="dendaGrupFilter" style="max-width:220px;">
+            <option value="semua">Semua Krama</option>
+            <option value="A">Grup A</option>
+            <option value="B">Grup B</option>
+          </select>
+        </div>
         <div class="table-wrap">
           <table>
             <thead><tr><th>No</th><th>Nama Krama</th><th>Status</th><th style="width:160px;">Denda Manual (Rp)</th><th style="width:150px;">Denda Ketidakhadiran</th><th style="width:140px;">Total Denda</th></tr></thead>
@@ -160,7 +167,7 @@
             <button class="btn ghost sm" id="dendaNextBtn">Selanjutnya ▶</button>
           </div>
         </div>
-        <div style="text-align:right;margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:14px;">
+        <div style="text-align:right;margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:14px;" id="dendaTotalWrap">
           Total Denda Terkumpul: <strong id="totalDenda">Rp 0</strong>
         </div>
       </div>
@@ -254,8 +261,15 @@
         <div class="form-row">
           <div><label>Tanggal Kegiatan</label><input type="date" id="absensiTanggal"></div>
           <div><label>Keterangan</label><input id="absensiKeterangan" placeholder="Contoh: pegebagan piodalan..."></div>
+          <div><label>Filter Grup</label>
+            <select id="absensiGrupFilter">
+              <option value="semua">Semua Grup (A & B)</option>
+              <option value="A">Grup A saja</option>
+              <option value="B">Grup B saja</option>
+            </select>
+          </div>
         </div>
-        <label style="margin-top:6px;">Kehadiran Anggota Grup A/B</label>
+        <label style="margin-top:6px;">Kehadiran Anggota</label>
         <div class="note" id="absensiNote" style="margin-bottom:10px;">Centang "Tidak Hadir" untuk krama yang absen — otomatis kena denda Rp 10.000 per absen saat disimpan.</div>
         <div class="anggota-list" id="absensiChecklist" style="max-height:320px;"></div>
         <div class="form-actions">
@@ -379,6 +393,6 @@
   </div>
 </div>
 
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
