@@ -81,6 +81,7 @@ button.btn:disabled{opacity:.4;cursor:not-allowed;}
 .badge.aktif{background:var(--green-soft);color:var(--green);}
 .badge.tidak{background:var(--clay-soft);color:var(--clay);}
 .badge.pindah{background:#E9E1CE;color:var(--text-dim);}
+.badge.luput{background:#F3E0DA;color:var(--clay);}
 .badge.groupA{background:#E3E9FA;color:#33508F;}
 .badge.groupB{background:#FCE9DA;color:#A85E22;}
 .badge.lunas{background:var(--green-soft);color:var(--green);}
