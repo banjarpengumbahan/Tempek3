@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tempek Banjar</title>
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -113,8 +113,12 @@
               <option value="Aktif">Aktif</option>
               <option value="Tidak Aktif">Tidak Aktif</option>
               <option value="Pindah">Pindah</option>
+              <option value="Luput">Luput</option>
             </select>
           </div>
+        </div>
+        <div class="form-row hidden" id="kramaKeteranganWrap" style="grid-template-columns:1fr;">
+          <div><label>Keterangan (alasan Tidak Aktif / Luput)</label><input id="kramaKeterangan" placeholder="Contoh: sakit, pindah sementara ke luar kota, dll"></div>
         </div>
         <div class="form-actions">
           <button class="btn ghost" id="kramaCancelBtn">Batal</button>
@@ -127,7 +131,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>No</th><th>Nama</th><th>Alamat</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>No</th><th>Nama</th><th>Alamat</th><th>Status</th><th>Keterangan</th><th></th></tr></thead>
             <tbody id="kramaTableBody"></tbody>
           </table>
         </div>
@@ -393,6 +397,6 @@
   </div>
 </div>
 
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
