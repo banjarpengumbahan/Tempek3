@@ -157,9 +157,10 @@ function renderRingkasan(){
     <div class="stat accent-clay"><div class="label">Total Sisa Tagihan (+bunga)</div><div class="value" style="font-size:19px;">${rupiah(totalSisaTagihan)}</div></div>
   `;
 
-  const a = Object.values(grupab).filter(g=>g==='A').length;
-  const b = Object.values(grupab).filter(g=>g==='B').length;
-  const belum = total - a - b;
+  const idAktif = new Set(hanyaAktif(krama).map(k=>k.id));
+  const a = Object.entries(grupab).filter(([id,g])=>g==='A' && idAktif.has(id)).length;
+  const b = Object.entries(grupab).filter(([id,g])=>g==='B' && idAktif.has(id)).length;
+  const belum = idAktif.size - a - b;
   document.getElementById('ringkasanGrup').innerHTML =
     `<span class="badge groupA">Grup A: ${a} orang</span> &nbsp;
      <span class="badge groupB">Grup B: ${b} orang</span> &nbsp;
@@ -181,7 +182,7 @@ function renderRingkasanKelompok(){
   if(!kel){ detail.innerHTML=''; return; }
   const anggota = kel.anggota.map(id=>{
     const k = krama.find(x=>x.id===id);
-    return k ? namaTeks(k) : null;
+    return (k && k.status !== 'Tidak Aktif' && k.status !== 'Luput') ? namaTeks(k) : null;
   }).filter(Boolean);
   const terakhir = tugasLog.find(t=>t.kelompok_no===no);
   const infoTerakhir = terakhir
@@ -203,7 +204,7 @@ function renderRingkasanGrupAB(){
   const sel = document.getElementById('ringkasanGrupPilih');
   if(!detail || !sel) return;
   const grup = sel.value || 'A';
-  const anggota = krama.filter(k=>grupab[k.id]===grup);
+  const anggota = hanyaAktif(krama).filter(k=>grupab[k.id]===grup);
   detail.innerHTML = `
     <span class="badge ${grup==='A'?'groupA':'groupB'}" style="margin-bottom:8px;display:inline-block;">Grup ${grup} · ${anggota.length} orang</span>
     ${anggota.length
@@ -214,8 +215,11 @@ document.getElementById('ringkasanGrupPilih').addEventListener('change', renderR
 
 /* ---------- DATA KRAMA ---------- */
 function badgeStatus(s){
-  const cls = s==='Aktif'?'aktif':(s==='Pindah'?'pindah':'tidak');
+  const cls = s==='Aktif'?'aktif':(s==='Pindah'?'pindah':(s==='Luput'?'luput':'tidak'));
   return `<span class="badge ${cls}">${s}</span>`;
+}
+function hanyaAktif(list){
+  return list.filter(k => k.status !== 'Tidak Aktif' && k.status !== 'Luput');
 }
 function namaTampil(k){
   return k.alias ? `${k.nama} <span style="color:var(--text-dim);font-weight:400;">(${k.alias})</span>` : k.nama;
@@ -224,18 +228,28 @@ function namaTeks(k){
   return k.alias ? `${k.nama} (${k.alias})` : k.nama;
 }
 
+function toggleKramaKeteranganWrap(){
+  const status = document.getElementById('kramaStatus').value;
+  const wrap = document.getElementById('kramaKeteranganWrap');
+  wrap.classList.toggle('hidden', !(status==='Tidak Aktif' || status==='Luput'));
+}
+document.getElementById('kramaStatus').addEventListener('change', toggleKramaKeteranganWrap);
+
 document.getElementById('kramaSaveBtn').addEventListener('click', async ()=>{
   const id = document.getElementById('kramaEditId').value;
   const nama = document.getElementById('kramaNama').value.trim();
   const alias = document.getElementById('kramaAlias').value.trim();
   const alamat = document.getElementById('kramaAlamat').value.trim();
   const status = document.getElementById('kramaStatus').value;
+  const keterangan_status = (status==='Tidak Aktif' || status==='Luput')
+    ? (document.getElementById('kramaKeterangan').value.trim() || null)
+    : null;
   if(!nama){ alert('Nama krama wajib diisi.'); return; }
   let error;
   if(id){
-    ({error} = await sb.from('krama').update({nama, alias, alamat, status}).eq('id', id));
+    ({error} = await sb.from('krama').update({nama, alias, alamat, status, keterangan_status}).eq('id', id));
   } else {
-    ({error} = await sb.from('krama').insert({nama, alias, alamat, status, denda_manual:0}));
+    ({error} = await sb.from('krama').insert({nama, alias, alamat, status, keterangan_status, denda_manual:0}));
   }
   if(error){ alert('Gagal menyimpan: '+error.message); return; }
   resetKramaForm();
@@ -248,6 +262,8 @@ function resetKramaForm(){
   document.getElementById('kramaAlias').value='';
   document.getElementById('kramaAlamat').value='';
   document.getElementById('kramaStatus').value='Aktif';
+  document.getElementById('kramaKeterangan').value='';
+  toggleKramaKeteranganWrap();
 }
 document.getElementById('kramaSearch').addEventListener('input', ()=>{ pageState.krama = 1; renderKrama(); });
 
@@ -256,7 +272,7 @@ function renderKrama(){
   const tbody = document.getElementById('kramaTableBody');
   const listFull = krama.filter(k=>k.nama.toLowerCase().includes(q));
   if(listFull.length===0){
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama pertama melalui formulir di atas.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama pertama melalui formulir di atas.</div></td></tr>`;
     paginate('krama', []);
     return;
   }
@@ -268,6 +284,7 @@ function renderKrama(){
       <td>${namaTampil(k)}</td>
       <td>${k.alamat||'—'}</td>
       <td>${badgeStatus(k.status)}</td>
+      <td style="font-size:12.5px;color:var(--text-dim);">${k.keterangan_status||'—'}</td>
       <td style="white-space:nowrap;">
         ${isViewOnly() ? '' : `
         <button class="btn ghost sm" onclick="editKrama('${k.id}')">Ubah</button>
@@ -283,6 +300,8 @@ window.editKrama = function(id){
   document.getElementById('kramaAlias').value = k.alias||'';
   document.getElementById('kramaAlamat').value = k.alamat||'';
   document.getElementById('kramaStatus').value = k.status;
+  document.getElementById('kramaKeterangan').value = k.keterangan_status||'';
+  toggleKramaKeteranganWrap();
   document.querySelector('[data-view="krama"]').click();
   window.scrollTo({top:0,behavior:'smooth'});
 };
@@ -341,7 +360,7 @@ function renderKelompok(){
     grid.innerHTML = kelompok.map(kel=>{
       const anggota = kel.anggota.map(id=>{
         const k = krama.find(x=>x.id===id);
-        return k ? namaTeks(k) : null;
+        return (k && k.status !== 'Tidak Aktif' && k.status !== 'Luput') ? namaTeks(k) : null;
       }).filter(Boolean);
       return `
         <div class="kelompok-card">
@@ -353,19 +372,25 @@ function renderKelompok(){
     }).join('');
     return;
   }
+  const kramaAktif = hanyaAktif(krama);
   grid.innerHTML = kelompok.map((kel)=>{
-    // hanya tampilkan krama yang belum masuk kelompok manapun, atau sudah masuk KELOMPOK INI
-    const tersedia = krama.filter(k => !k.kelompok_no || k.kelompok_no === kel.no);
+    // hanya tampilkan krama AKTIF yang belum masuk kelompok manapun, atau sudah masuk KELOMPOK INI
+    const tersedia = kramaAktif.filter(k => !k.kelompok_no || k.kelompok_no === kel.no);
     const anggotaOptions = tersedia.map(k=>{
       const checked = k.kelompok_no === kel.no ? 'checked' : '';
       return `<label class="anggota-item"><input type="checkbox" ${checked} onchange="toggleAnggota(${kel.no}, '${k.id}', this.checked)"> ${namaTeks(k)}</label>`;
-    }).join('') || `<div style="font-size:12.5px;color:var(--text-dim);padding:6px;">Semua krama sudah masuk kelompok lain.</div>`;
+    }).join('') || `<div style="font-size:12.5px;color:var(--text-dim);padding:6px;">Semua krama aktif sudah masuk kelompok lain.</div>`;
+    // anggota yang tercatat di kelompok ini tapi statusnya sekarang tidak aktif/luput -> tidak dihitung
+    const jumlahAktif = kel.anggota.filter(id=>{
+      const k = krama.find(x=>x.id===id);
+      return k && k.status !== 'Tidak Aktif' && k.status !== 'Luput';
+    }).length;
     return `
       <div class="kelompok-card">
         <div class="kno"><span class="num">${kel.no}</span> Kelompok ${kel.no}</div>
         <label>Anggota</label>
         <div class="anggota-list">${anggotaOptions}</div>
-        <div class="count-pill">${kel.anggota.length} anggota</div>
+        <div class="count-pill">${jumlahAktif} anggota</div>
       </div>`;
   }).join('');
 }
@@ -414,13 +439,14 @@ window.hapusTugasLog = async function(id){
 /* ---------- GRUP A/B ---------- */
 function renderGrupAB(){
   const tbody = document.getElementById('grupabTableBody');
-  if(krama.length===0){
-    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="big">Belum ada krama</div>Tambahkan krama terlebih dahulu di tab Data Krama.</div></td></tr>`;
+  const listSumber = hanyaAktif(krama);
+  if(listSumber.length===0){
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="big">${krama.length===0 ? 'Belum ada krama' : 'Belum ada krama aktif'}</div>${krama.length===0 ? 'Tambahkan krama terlebih dahulu di tab Data Krama.' : 'Semua krama berstatus Tidak Aktif atau Luput.'}</div></td></tr>`;
     document.getElementById('grupabSummary').textContent='';
     paginate('grupab', []);
     return;
   }
-  const {items:list, start} = paginate('grupab', krama);
+  const {items:list, start} = paginate('grupab', listSumber);
   tbody.innerHTML = list.map((k,i)=>{
     const g = grupab[k.id] || '';
     return `
@@ -438,8 +464,9 @@ function renderGrupAB(){
       </td>
     </tr>`;
   }).join('');
-  const a = Object.values(grupab).filter(g=>g==='A').length;
-  const b = Object.values(grupab).filter(g=>g==='B').length;
+  const idAktif = new Set(listSumber.map(k=>k.id));
+  const a = Object.entries(grupab).filter(([id,g])=>g==='A' && idAktif.has(id)).length;
+  const b = Object.entries(grupab).filter(([id,g])=>g==='B' && idAktif.has(id)).length;
   document.getElementById('grupabSummary').innerHTML = `Grup A: <strong>${a}</strong> orang &nbsp;•&nbsp; Grup B: <strong>${b}</strong> orang`;
 }
 wirePager('grupab', renderGrupAB);
@@ -459,7 +486,7 @@ function renderAbsensiForm(){
   if(!document.getElementById('absensiTanggal').value) document.getElementById('absensiTanggal').value = todayStr();
   const wrap = document.getElementById('absensiChecklist');
   const filterGrup = document.getElementById('absensiGrupFilter').value;
-  const anggotaGrup = krama.filter(k => {
+  const anggotaGrup = hanyaAktif(krama).filter(k => {
     if(filterGrup === 'semua') return grupab[k.id] === 'A' || grupab[k.id] === 'B';
     return grupab[k.id] === filterGrup;
   });
@@ -684,6 +711,7 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
 
   const kramaRows = krama.map((k,i)=>({
     'No': i+1, 'Nama Krama': k.nama, 'Alias/Panggilan': k.alias||'', 'Alamat / No. KK': k.alamat||'', 'Status': k.status,
+    'Keterangan Status': k.keterangan_status||'',
     'Kelompok Ngayah': k.kelompok_no || '-',
     'Denda Manual (Rp)': Number(k.denda_manual)||0,
     'Denda Ketidakhadiran (Rp)': dendaOtomatis(k.id),
